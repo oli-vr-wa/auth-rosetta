@@ -45,7 +45,7 @@ auth-rosetta/
 ├── init-databases.sql       # Postgres initialization script
 ├── .env                     # Local secrets (ignored in git)
 ├── .env.example             # Example .env file for reference
-├── frontend-react/           # The shared React application
+├── frontend-react/          # The shared React application
 ├── backend-net/             # .NET 10 implementation
 ├── backend-nest/            # NestJS implementation
 ├── backend-python/          # Python implementation
