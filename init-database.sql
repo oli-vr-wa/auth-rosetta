@@ -1,0 +1,5 @@
+CREATE DATABASE auth_net;
+CREATE DATABASE auth_nest;
+CREATE DATABASE auth_python;
+CREATE DATABASE auth_go;
+CREATE DATABASE auth_java;

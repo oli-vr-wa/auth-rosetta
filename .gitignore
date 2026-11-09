@@ -1,0 +1,45 @@
+# Visual studio
+.vs/
+
+# Secrets
+.env
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# .NET
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+bin/
+obj/
+TestResults/
+
+# NestJS & React
+node_modules/
+dist/
+npm-debug.log
+yarn-error.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.pytest_cache/
+
+# Go
+/backend-go/bin/
+*.exe
+*.test
+*.out
+
+# Java
+target/
+*.class
+*.jar
+*.war
+.idea/
