@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="AuthRosetta.Api/AuthRosetta.Api.csproj" />
+  <Project Path="AuthRosetta.Application/AuthRosetta.Application.csproj" />
+  <Project Path="AuthRosetta.Domain/AuthRosetta.Domain.csproj" />
+  <Project Path="AuthRosetta.Infrastructure/AuthRosetta.Infrastructure.csproj" />
+</Solution>
