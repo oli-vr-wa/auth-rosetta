@@ -1,0 +1,201 @@
+### ============================================================
+### Auth Rosetta - API tests
+### Works with the VS Code "REST Client" extension (humao.rest-client).
+###
+### How to use:
+###   1. Start the backend and set @baseUrl for the stack under test.
+###   2. Run the requests top to bottom (click "Send Request" above each one).
+###   3. At step 4, paste the secret into an authenticator app, then put the
+###      current 6-digit code into @code. Codes last 30 seconds, so update
+###      @code right before steps 4 and 8.
+###   4. To re-run the whole flow, change @email (register returns 409 otherwise).
+### ============================================================
+
+# Backend ports: .NET 5001 | NestJS 5002 | Python 5003 | Go 5004 | Java 5005
+@baseUrl = http://localhost:5001
+@email = test@example.com
+@password = Sup3rSecret!
+@code = 000000
+
+
+### ------------------------------------------------------------
+### 0. VALIDATION (no state is created)
+### ------------------------------------------------------------
+
+### 0a. Register with a short password -> expect 400
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "short"
+}
+
+### 0b. Register with an empty email -> expect 400
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "",
+  "password": "{{password}}"
+}
+
+
+### ------------------------------------------------------------
+### 1. REGISTER -> expect 201 with { otpauthUri, secret }
+### Copy the "secret" into your authenticator app (manual entry),
+### or paste the otpauthUri into a QR generator.
+### ------------------------------------------------------------
+
+# @name register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### 1b. Register the same email again -> expect 409
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+
+### ------------------------------------------------------------
+### 2. LOGIN BEFORE 2FA IS CONFIRMED -> expect 401
+### Even with a correct password and a valid code, login must fail
+### because 2FA is not enabled yet.
+### ------------------------------------------------------------
+
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "code": "{{code}}"
+}
+
+
+### ------------------------------------------------------------
+### 3. CONFIRM 2FA WITH A WRONG CODE -> expect 400
+### ------------------------------------------------------------
+
+POST {{baseUrl}}/api/auth/2fa/confirm
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "code": "111111"
+}
+
+### 3b. Confirm 2FA for an unknown email -> expect 400 (same as a wrong code)
+POST {{baseUrl}}/api/auth/2fa/confirm
+Content-Type: application/json
+
+{
+  "email": "nobody@example.com",
+  "code": "{{code}}"
+}
+
+
+### ------------------------------------------------------------
+### 4. CONFIRM 2FA WITH A VALID CODE -> expect 200
+### Update @code at the top first.
+### ------------------------------------------------------------
+
+POST {{baseUrl}}/api/auth/2fa/confirm
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "code": "{{code}}"
+}
+
+
+### ------------------------------------------------------------
+### 5. LOGIN FAILURES - all three must return an identical 401
+### ------------------------------------------------------------
+
+### 5a. Wrong password
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "WrongPassword123",
+  "code": "{{code}}"
+}
+
+### 5b. Wrong code
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "code": "111111"
+}
+
+### 5c. Unknown email
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "nobody@example.com",
+  "password": "{{password}}",
+  "code": "{{code}}"
+}
+
+
+### ------------------------------------------------------------
+### 6. SUCCESSFUL LOGIN -> expect 200 with { token }
+### Update @code at the top if the previous one is older than 30 seconds.
+### ------------------------------------------------------------
+
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "code": "{{code}}"
+}
+
+
+### ------------------------------------------------------------
+### 7. ME
+### ------------------------------------------------------------
+
+### 7a. With the token -> expect 200 with { email }
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{login.response.body.token}}
+
+### 7b. Without a token -> expect 401
+GET {{baseUrl}}/api/auth/me
+
+### 7c. With a garbage token -> expect 401
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer not-a-real-token
+
+
+### ------------------------------------------------------------
+### 8. LOGOUT -> expect 204
+### ------------------------------------------------------------
+
+POST {{baseUrl}}/api/auth/logout
+Authorization: Bearer {{login.response.body.token}}
+
+### 8b. Same token on /me after logout -> expect 401 (token revoked)
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{login.response.body.token}}
+
+### 8c. Logout again with the revoked token -> expect 401
+POST {{baseUrl}}/api/auth/logout
+Authorization: Bearer {{login.response.body.token}}
