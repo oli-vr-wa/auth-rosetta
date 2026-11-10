@@ -33,3 +33,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     if (!response.ok) throw new ApiError(response.status, data?.message || response.statusText);
     return data as T;
 }
+
+export function errorMessage(error: unknown): string {
+    if (error instanceof ApiError) return error.message;
+    return String(error);
+}
