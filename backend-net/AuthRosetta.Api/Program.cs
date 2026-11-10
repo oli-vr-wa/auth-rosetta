@@ -10,6 +10,7 @@ using AuthRosetta.Api.Endpoints;
 using AuthRosetta.Infrastructure.Repositories;
 using AuthRosetta.Application.Services;
 using Microsoft.AspNetCore.Authorization;
+using AuthRosetta.Api.Helpers;
 
 if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
     DotNetEnv.Env.TraversePath().Load(); // Load environment variables from .env file
@@ -45,7 +46,8 @@ builder.Services.AddOpenApi();
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
     policy.WithOrigins("http://localhost:5173")
     .AllowAnyHeader()
-    .AllowAnyMethod()));
+    .AllowAnyMethod()
+    .AllowCredentials()));
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -65,6 +67,11 @@ builder.Services
         };
         o.Events = new JwtBearerEvents
         {
+            OnMessageReceived = context =>
+            {
+                context.Token = context.Request.Cookies[AuthCookie.Name];
+                return Task.CompletedTask;
+            },
             OnTokenValidated = async context =>
             {
                 var jti = context.Principal?.FindFirst("jti");

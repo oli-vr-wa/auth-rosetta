@@ -1,5 +1,7 @@
-﻿using AuthRosetta.Application.DTOs;
+﻿using AuthRosetta.Api.Helpers;
+using AuthRosetta.Application.DTOs;
 using AuthRosetta.Application.Interfaces;
+using AuthRosetta.Infrastructure.Services;
 using System.Security.Claims;
 
 namespace AuthRosetta.Api.Endpoints;
@@ -62,14 +64,18 @@ public static class AuthEndpoints
     /// </summary>
     /// <param name="request">The login request containing email, password, and code.</param>
     /// <param name="authService">The authentication service.</param>
+    /// <param name="jwt">The JWT options.</param>
+    /// <param name="ctx">The HTTP context.</param>
     /// <returns>The result of the login attempt.</returns>
-    private static async Task<IResult> Login(LoginRequest request, IAuthService authService)
+    private static async Task<IResult> Login(LoginRequest request, IAuthService authService, JwtOptions jwt, HttpContext ctx)
     {
         var token = await authService.LoginAsync(request.Email, request.Password, request.Code);
 
-        return token is null
-            ? Results.Json(new { error = "Invalid credentials"}, statusCode: StatusCodes.Status401Unauthorized)
-            : Results.Ok(new { token });
+        if (token is null)
+            return Results.Json(new { error = "Invalid credentials" }, statusCode: StatusCodes.Status401Unauthorized);
+
+        AuthCookie.Set(ctx, token, jwt.ExpiryMinutes);
+        return Results.Ok(new { message = "Login successful" });
     }
 
     /// <summary>
@@ -84,8 +90,9 @@ public static class AuthEndpoints
     /// </summary>
     /// <param name="user">The claims principal representing the authenticated user.</param>
     /// <param name="authService">The authentication service.</param>
+    /// <param name="ctx">The HTTP context.</param>
     /// <returns>The result of the logout operation.</returns>
-    private static async Task<IResult> Logout(ClaimsPrincipal user, IAuthService authService)
+    private static async Task<IResult> Logout(ClaimsPrincipal user, IAuthService authService, HttpContext ctx)
     {
         var jti = user.FindFirstValue("jti");
         var expClaim = user.FindFirstValue("exp");
@@ -95,6 +102,7 @@ public static class AuthEndpoints
         var expiresAt = DateTimeOffset.FromUnixTimeSeconds(long.Parse(expClaim)).UtcDateTime;
         await authService.LogoutAsync(jti, expiresAt);
 
+        AuthCookie.Clear(ctx);
         return Results.NoContent();
     }
 }
