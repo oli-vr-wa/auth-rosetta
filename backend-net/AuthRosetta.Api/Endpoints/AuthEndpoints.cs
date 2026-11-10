@@ -15,11 +15,11 @@ public static class AuthEndpoints
     {
         var group = app.MapGroup("/api/auth");
 
-        group.MapPost("/register", Register);
-        group.MapPost("2fa/confirm", ConfirmTwoFactorAuthentication);
-        group.MapPost("/login", Login);
+        group.MapPost("/register", Register).AllowAnonymous();
+        group.MapPost("2fa/confirm", ConfirmTwoFactorAuthentication).AllowAnonymous();
+        group.MapPost("/login", Login).AllowAnonymous();
         group.MapGet("/me", Me);
-        group.MapPost("logout", Logout).RequireAuthorization();
+        group.MapPost("logout", Logout);
 
         return app;
     }

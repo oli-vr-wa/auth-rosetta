@@ -13,6 +13,27 @@ services:
       # Persist data even if container is destroyed
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend-net:
+    build: ./backend-net
+    container_name: rosetta_net
+    profiles: ["net"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=auth_net
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_KEY: ${JWT_KEY}
+    ports:
+      - "5001:8080"  
 
 volumes:
   postgres_data:
