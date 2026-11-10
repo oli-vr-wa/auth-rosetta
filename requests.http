@@ -175,7 +175,7 @@ Content-Type: application/json
 
 ### 7a. With the token -> expect 200 with { email }
 GET {{baseUrl}}/api/auth/me
-Authorization: Bearer {{login.response.body.token}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 7b. Without a token -> expect 401
 GET {{baseUrl}}/api/auth/me
@@ -190,12 +190,12 @@ Authorization: Bearer not-a-real-token
 ### ------------------------------------------------------------
 
 POST {{baseUrl}}/api/auth/logout
-Authorization: Bearer {{login.response.body.token}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 8b. Same token on /me after logout -> expect 401 (token revoked)
 GET {{baseUrl}}/api/auth/me
-Authorization: Bearer {{login.response.body.token}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 8c. Logout again with the revoked token -> expect 401
 POST {{baseUrl}}/api/auth/logout
-Authorization: Bearer {{login.response.body.token}}
+Authorization: Bearer {{login.response.body.$.token}}

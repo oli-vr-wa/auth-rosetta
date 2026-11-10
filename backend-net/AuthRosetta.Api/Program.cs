@@ -9,8 +9,10 @@ using System.Text;
 using AuthRosetta.Api.Endpoints;
 using AuthRosetta.Infrastructure.Repositories;
 using AuthRosetta.Application.Services;
+using Microsoft.AspNetCore.Authorization;
 
-DotNetEnv.Env.TraversePath().Load(); // Load environment variables from .env file
+if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
+    DotNetEnv.Env.TraversePath().Load(); // Load environment variables from .env file
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +41,11 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRevokedTokenRepository, RevokedTokenRepository>();
 builder.Services.AddOpenApi();
+
+builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
+    policy.WithOrigins("http://localhost:5173")
+    .AllowAnyHeader()
+    .AllowAnyMethod()));
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -71,7 +78,8 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 
 var app = builder.Build();
 
@@ -82,7 +90,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors();
+app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
