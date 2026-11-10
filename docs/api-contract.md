@@ -12,9 +12,23 @@ If a backend behaves differently from this document, the backend is wrong, not t
 | Format | JSON request and response bodies, `Content-Type: application/json` |
 | JSON casing | `camelCase` |
 | Error body | `{ "error": "message" }` |
-| Auth | `Authorization: Bearer <token>` |
-| CORS | Allow origin `http://localhost:5173`, any header, any method |
+| Authentication | JWT in an `HttpOnly` cookie named `access_token` (see [Session cookie](#session-cookie)) |
 | Email handling | Trimmed and lowercased before any lookup or storage |
+
+The `Authorization` header is **not** part of this contract. Clients never see or handle the token: the server sets it on login, the browser sends it automatically, and the server clears it on logout.
+
+### CORS
+
+Because the session lives in a cookie, CORS must allow credentials.
+
+| Setting | Value |
+|---|---|
+| Allowed origin | `http://localhost:5173` (explicit, a wildcard `*` is **not** allowed with credentials) |
+| Allow credentials | `true` (`Access-Control-Allow-Credentials: true`) |
+| Allowed methods | `GET`, `POST`, `OPTIONS` |
+| Allowed headers | `Content-Type` |
+
+The frontend must send every request with `credentials: "include"`.
 
 ### Ports
 
@@ -34,9 +48,27 @@ Each backend uses its own database on the shared Postgres container: `auth_net`,
 
 1. **Register**: account is created with 2FA disabled, and a TOTP secret is returned.
 2. **Confirm 2FA**: the user scans the QR code, submits a code, and 2FA becomes enabled.
-3. **Login**: email, password and a current TOTP code are all required. A JWT is returned.
-4. **Success page**: the frontend calls `/me` with the token.
-5. **Logout**: the token is revoked server-side.
+3. **Login**: email, password and a current TOTP code are all required. The server sets the session cookie.
+4. **Success page**: the frontend calls `/me`, and the browser attaches the cookie.
+5. **Logout**: the token is revoked server-side and the cookie is cleared.
+
+---
+
+## Session cookie
+
+Set by `POST /login`, cleared by `POST /logout`.
+
+| Attribute | Value |
+|---|---|
+| Name | `access_token` |
+| Value | The signed JWT |
+| `HttpOnly` | `true` (JavaScript must never be able to read it) |
+| `Secure` | `true` whenever the request arrived over HTTPS. May be `false` on plain-HTTP local development |
+| `SameSite` | `Strict` |
+| `Path` | `/` |
+| Lifetime | 60 minutes (`Expires` / `Max-Age` matches the JWT `exp`) |
+
+To clear the cookie, send `Set-Cookie` with the same name, path and attributes and an expiry date in the past.
 
 ---
 
@@ -83,7 +115,7 @@ Verifies a TOTP code against the stored secret and enables 2FA.
 
 ### `POST /api/auth/login`
 
-Requires password **and** a valid TOTP code, and the account must have 2FA enabled.
+Requires password **and** a valid TOTP code, and the account must have 2FA enabled. On success the token is delivered **only** in the session cookie, never in the response body.
 
 **Request**
 
@@ -93,10 +125,10 @@ Requires password **and** a valid TOTP code, and the account must have 2FA enabl
 
 **Responses**
 
-| Status | Body | When |
-|---|---|---|
-| `200 OK` | `{ "token": "<jwt>" }` | All checks pass |
-| `401 Unauthorized` | `{ "error": "Invalid credentials" }` | Any failure |
+| Status | Body | Headers | When |
+|---|---|---|---|
+| `200 OK` | `{ "message": "Login successful" }` | `Set-Cookie: access_token=...` | All checks pass |
+| `401 Unauthorized` | `{ "error": "Invalid credentials" }` | no cookie | Any failure |
 
 A login failure must **always** return the same generic `401`. Never reveal whether the email, password, code, or 2FA status was the cause.
 
@@ -106,29 +138,31 @@ A login failure must **always** return the same generic `401`. Never reveal whet
 
 Returns the identity of the authenticated user.
 
-**Headers:** `Authorization: Bearer <token>`
+**Requires:** the `access_token` cookie.
 
 **Responses**
 
 | Status | Body | When |
 |---|---|---|
 | `200 OK` | `{ "email": "user@example.com" }` | Valid, non-revoked token |
-| `401 Unauthorized` | none or `{ "error": "..." }` | Missing, invalid, expired or revoked token |
+| `401 Unauthorized` | none or `{ "error": "..." }` | Cookie missing, or token invalid, expired or revoked |
+
+An anonymous request must never return `200`.
 
 ---
 
 ### `POST /api/auth/logout`
 
-Revokes the presented token so it can no longer be used, even before it expires.
+Revokes the token in the cookie so it can no longer be used, even before it expires, and clears the cookie.
 
-**Headers:** `Authorization: Bearer <token>`
+**Requires:** the `access_token` cookie.
 
 **Responses**
 
-| Status | Body | When |
-|---|---|---|
-| `204 No Content` | none | Token revoked |
-| `401 Unauthorized` | none or `{ "error": "..." }` | Missing, invalid, expired or already revoked token |
+| Status | Body | Headers | When |
+|---|---|---|---|
+| `204 No Content` | none | `Set-Cookie` that clears `access_token` | Token revoked |
+| `401 Unauthorized` | none or `{ "error": "..." }` | none | Cookie missing, or token invalid, expired or already revoked |
 
 ---
 
@@ -169,6 +203,8 @@ otpauth://totp/AuthRosetta:{email}?secret={secret}&issuer=AuthRosetta
 The issuer and email in the label must be URL-encoded.
 
 ### JWT
+
+The JWT is the value of the session cookie.
 
 | Setting | Value |
 |---|---|
@@ -227,21 +263,40 @@ Each backend uses its own naming conventions, but must store these fields.
 
 All three come from the root `.env` file.
 
+## Security notes
+
+### Why a cookie and not a header
+
+The token is in an `HttpOnly` cookie so that JavaScript, including injected scripts and compromised dependencies, can never read it. This prevents token theft through XSS.
+
+### CSRF
+
+Cookies are sent automatically, so the API must defend against cross-site requests:
+
+- `SameSite=Strict` stops the browser attaching the cookie to requests started from other sites.
+- All state-changing endpoints require a JSON body, which forces a CORS preflight that only the allowed origin passes.
+- `localhost:5173` and `localhost:5001` are the same *site* (ports are ignored), so this works in development. In production the frontend and API must share a registrable domain (for example `app.example.com` and `api.example.com`).
+
 ## Known limitations (documented on purpose)
 
+- An XSS bug can no longer steal the token, but injected script can still make authenticated requests while the victim's page is open, because the browser attaches the cookie.
+- There is no CSRF token. The design relies on `SameSite=Strict` plus the CORS rules above.
 - TOTP secrets are stored in plaintext. Production systems should encrypt them at rest.
 - There is no rate limiting or account lockout, so a 6-digit code can be brute-forced.
 - Logout revokes only the presented token. "Log out everywhere" is not supported.
 - Every authenticated request performs a denylist lookup, which trades away statelessness.
+- A production setup would normally use a short-lived access token plus a refresh token.
 
 ## Manual test checklist
 
-1. Register a user and receive `otpauthUri` and `secret`.
-2. Add the secret to an authenticator app.
-3. Login **before** confirming 2FA, and expect `401`.
-4. Confirm with a valid code and expect `200`.
-5. Login with a wrong password, wrong code, and unknown email, and expect an identical `401` each time.
-6. Login with valid credentials and receive a token.
-7. Call `/me` and receive the email.
-8. Call `/logout` and expect `204`.
-9. Call `/me` again with the same token and expect `401`.
+1. Call `/me` with no cookie and expect `401`.
+2. Register a user and receive `otpauthUri` and `secret`.
+3. Add the secret to an authenticator app.
+4. Login **before** confirming 2FA, and expect `401` with no `Set-Cookie`.
+5. Confirm with a valid code and expect `200`.
+6. Login with a wrong password, wrong code, and unknown email, and expect an identical `401` each time.
+7. Login with valid credentials, expect `200` and a `Set-Cookie` header containing `HttpOnly` and `SameSite=Strict`, and confirm the body contains no token.
+8. Call `/me` and receive the email.
+9. Save the cookie value, then call `/logout` and expect `204` plus a cookie-clearing `Set-Cookie`.
+10. Call `/me` again and expect `401` (cookie gone).
+11. Replay the **saved** cookie value on `/me` and expect `401` (token revoked server-side).
