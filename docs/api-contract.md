@@ -44,6 +44,19 @@ The frontend must send every request with `credentials: "include"`.
 
 Each backend uses its own database on the shared Postgres container: `auth_net`, `auth_nest`, `auth_python`, `auth_go`, `auth_java`.
 
+## Client requirements
+
+Anything calling this API from a browser must follow these rules.
+
+| Rule | Why |
+|---|---|
+| Send every request with `credentials: "include"` | Without it the browser neither stores nor sends the session cookie |
+| Open the frontend at `http://localhost:5173` and call the API through `localhost`, never `127.0.0.1` | `SameSite=Strict` and the CORS origin check both treat `127.0.0.1` as a different site |
+| Never store, read or send the token yourself | The cookie is `HttpOnly`, so JavaScript cannot see it |
+| Send `code` as a string | A number would drop leading zeros |
+| Treat a `401` from `/me` as "not logged in" | There is no client-side token to inspect |
+| Log out or clear cookies for `localhost` when switching backends | Every backend uses the cookie name `access_token`, and cookies are scoped by host, not by port |
+
 ## Flow
 
 1. **Register**: account is created with 2FA disabled, and a TOTP secret is returned.
@@ -280,6 +293,8 @@ Cookies are sent automatically, so the API must defend against cross-site reques
 ## Known limitations (documented on purpose)
 
 - An XSS bug can no longer steal the token, but injected script can still make authenticated requests while the victim's page is open, because the browser attaches the cookie.
+- The TOTP secret is returned only once, by `/register`. If the user reloads or closes the page before confirming, the secret cannot be retrieved. The account then exists with 2FA unconfirmed, the email stays taken (`409`), and no endpoint re-issues a secret. Unconfirmed accounts never expire.
+- A TOTP code can be reused within its validity window (about 90 seconds with the ±1 step window), so there is no replay protection.
 - There is no CSRF token. The design relies on `SameSite=Strict` plus the CORS rules above.
 - TOTP secrets are stored in plaintext. Production systems should encrypt them at rest.
 - There is no rate limiting or account lockout, so a 6-digit code can be brute-forced.
