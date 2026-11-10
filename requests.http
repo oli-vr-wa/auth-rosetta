@@ -1,28 +1,48 @@
 ### ============================================================
-### Auth Rosetta - API tests
-### Works with the VS Code "REST Client" extension (humao.rest-client).
+### Auth Rosetta - API tests (cookie-based session)
+###
+### The token now lives in an HttpOnly cookie named "access_token".
+### Your HTTP client stores the cookie from the login response and sends
+### it on later requests automatically (VS Code REST Client does this by
+### default). Because of that, ORDER MATTERS: anonymous checks must run
+### BEFORE the successful login, and the revocation replay needs the
+### token value pasted in by hand.
 ###
 ### How to use:
 ###   1. Start the backend and set @baseUrl for the stack under test.
-###   2. Run the requests top to bottom (click "Send Request" above each one).
+###   2. Run the requests top to bottom.
 ###   3. At step 4, paste the secret into an authenticator app, then put the
 ###      current 6-digit code into @code. Codes last 30 seconds, so update
-###      @code right before steps 4 and 8.
-###   4. To re-run the whole flow, change @email (register returns 409 otherwise).
+###      @code right before steps 4 and 6.
+###   4. To re-run the whole flow, change @email (register returns 409
+###      otherwise) and clear your client's cookies.
 ### ============================================================
 
 # Backend ports: .NET 5001 | NestJS 5002 | Python 5003 | Go 5004 | Java 5005
 @baseUrl = http://localhost:5001
 @email = test@example.com
 @password = Sup3rSecret!
-@code = 000000
+@code = 548339
+
+# Paste the cookie VALUE from the step 6 response here (see step 6).
+@stolenToken = paste-token-value-here
 
 
 ### ------------------------------------------------------------
-### 0. VALIDATION (no state is created)
+### 0. ANONYMOUS CHECKS (run these before logging in)
 ### ------------------------------------------------------------
 
-### 0a. Register with a short password -> expect 400
+### 0a. /me without a cookie -> expect 401
+GET {{baseUrl}}/api/auth/me
+
+### 0b. /me with a garbage cookie -> expect 401
+GET {{baseUrl}}/api/auth/me
+Cookie: access_token=not-a-real-token
+
+### 0c. /logout without a cookie -> expect 401
+POST {{baseUrl}}/api/auth/logout
+
+### 0d. Register with a short password -> expect 400
 POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
 
@@ -31,7 +51,7 @@ Content-Type: application/json
   "password": "short"
 }
 
-### 0b. Register with an empty email -> expect 400
+### 0e. Register with an empty email -> expect 400
 POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
 
@@ -67,9 +87,7 @@ Content-Type: application/json
 
 
 ### ------------------------------------------------------------
-### 2. LOGIN BEFORE 2FA IS CONFIRMED -> expect 401
-### Even with a correct password and a valid code, login must fail
-### because 2FA is not enabled yet.
+### 2. LOGIN BEFORE 2FA IS CONFIRMED -> expect 401, no Set-Cookie
 ### ------------------------------------------------------------
 
 POST {{baseUrl}}/api/auth/login
@@ -120,6 +138,7 @@ Content-Type: application/json
 
 ### ------------------------------------------------------------
 ### 5. LOGIN FAILURES - all three must return an identical 401
+###    and must NOT set a cookie
 ### ------------------------------------------------------------
 
 ### 5a. Wrong password
@@ -154,8 +173,16 @@ Content-Type: application/json
 
 
 ### ------------------------------------------------------------
-### 6. SUCCESSFUL LOGIN -> expect 200 with { token }
+### 6. SUCCESSFUL LOGIN -> expect 200 with { message }
 ### Update @code at the top if the previous one is older than 30 seconds.
+###
+### Check the RESPONSE HEADERS:
+###   - Set-Cookie: access_token=...; HttpOnly; SameSite=Strict; Path=/
+###   - the body must NOT contain a token
+###
+### Then copy the cookie value (the part after "access_token=" and
+### before the first ";") into @stolenToken at the top. Step 9 uses it
+### to prove the token is revoked server-side.
 ### ------------------------------------------------------------
 
 # @name login
@@ -170,32 +197,34 @@ Content-Type: application/json
 
 
 ### ------------------------------------------------------------
-### 7. ME
+### 7. ME with the session cookie -> expect 200 with { email }
+### The cookie is sent automatically, there is no Authorization header.
 ### ------------------------------------------------------------
 
-### 7a. With the token -> expect 200 with { email }
 GET {{baseUrl}}/api/auth/me
-Authorization: Bearer {{login.response.body.$.token}}
-
-### 7b. Without a token -> expect 401
-GET {{baseUrl}}/api/auth/me
-
-### 7c. With a garbage token -> expect 401
-GET {{baseUrl}}/api/auth/me
-Authorization: Bearer not-a-real-token
 
 
 ### ------------------------------------------------------------
 ### 8. LOGOUT -> expect 204
+### The response must contain a Set-Cookie that clears access_token.
 ### ------------------------------------------------------------
 
 POST {{baseUrl}}/api/auth/logout
-Authorization: Bearer {{login.response.body.$.token}}
 
-### 8b. Same token on /me after logout -> expect 401 (token revoked)
+### 8b. /me again -> expect 401 (the cookie was cleared)
 GET {{baseUrl}}/api/auth/me
-Authorization: Bearer {{login.response.body.$.token}}
 
-### 8c. Logout again with the revoked token -> expect 401
+
+### ------------------------------------------------------------
+### 9. REVOCATION REPLAY
+### Simulates a stolen token: send the OLD cookie value manually.
+### Both must return 401, because its jti is on the denylist.
+### ------------------------------------------------------------
+
+### 9a. Replay the revoked token on /me -> expect 401
+GET {{baseUrl}}/api/auth/me
+Cookie: access_token={{stolenToken}}
+
+### 9b. Replay the revoked token on /logout -> expect 401
 POST {{baseUrl}}/api/auth/logout
-Authorization: Bearer {{login.response.body.$.token}}
+Cookie: access_token={{stolenToken}}
