@@ -18,6 +18,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+  
+  frontend:
+    build: ./frontend-react
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:5001}
+      USE_POLLING: "true"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend-react:/app
+      - /app/node_modules
+    restart: unless-stopped
 
   backend-net:
     build: ./backend-net
