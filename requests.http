@@ -22,7 +22,7 @@
 @baseUrl = http://localhost:5002
 @email = test@example.com
 @password = Sup3rSecret!
-@code = 803037
+@code = 000000
 
 # Paste the cookie VALUE from the step 6 response here (see step 6).
 @stolenToken = paste-token-value-here
