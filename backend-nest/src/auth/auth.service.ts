@@ -6,11 +6,12 @@ import {
     UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { LessThan, QueryFailedError, Repository } from 'typeorm';
 import { User } from '@/users/user.entity';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { TotpService } from './totp.service';
+import { RevokedToken } from './revoked-token.entity';
 
 const POSTGRES_UNIQUE_VALIDATION = '23505';
 
@@ -21,6 +22,7 @@ export class AuthService {
 
     constructor(
         @InjectRepository(User) private readonly users: Repository<User>,
+        @InjectRepository(RevokedToken) private readonly revokedTokens: Repository<RevokedToken>,
         private readonly passwords: PasswordService,
         private readonly totp: TotpService,
         private readonly tokens: TokenService,
@@ -117,5 +119,27 @@ export class AuthService {
         }
 
         return this.tokens.createToken(user.id, user.email);
+    }
+
+    /**
+     * Logs out a user by revoking their JWT token, preventing its future use.
+     * @param jti - The unique identifier of the JWT token to revoke.
+     * @param expiresAt - The expiration date of the JWT token to revoke.
+     * @returns void
+     */
+    async logout(jti: string, expiresAt: Date): Promise<void> {
+        // Housekeeping: Remove all the expired revoked tokens, as they are no longer needed.
+        await this.revokedTokens.delete({ expiresAt: LessThan(new Date()) });
+
+        await this.revokedTokens.upsert({ jti, expiresAt }, ['jti']);
+    }
+
+    /**
+     * Checks if a JWT token has been revoked.
+     * @param jti - The unique identifier of the JWT token to check.
+     * @returns A promise that resolves to true if the token is revoked, false otherwise.
+     */
+    isRevoked(jti: string): Promise<boolean> {
+        return this.revokedTokens.existsBy({ jti });
     }
 }

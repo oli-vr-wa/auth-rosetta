@@ -9,10 +9,12 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '@/users/user.entity';
+import { RevokedToken } from './revoked-token.entity';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([User]),
+        TypeOrmModule.forFeature([RevokedToken]),
         JwtModule.registerAsync({
             inject: [ConfigService],
             useFactory: (config: ConfigService) => ({

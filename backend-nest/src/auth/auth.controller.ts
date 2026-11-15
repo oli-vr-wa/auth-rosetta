@@ -1,8 +1,11 @@
-import { Body, Controller, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { setAuthCookie } from './auth-cookie';
+import { clearAuthCookie, setAuthCookie } from './auth-cookie';
 import { AuthService } from './auth.service';
 import { ConfirmDto, LoginDto, RegisterDto } from './dto/auth.dto';
+import { CookieAuthGuard } from './cookie-auth.guard';
+import { CurrentUser } from './current-user.decorator';
+import { type AccessTokenPayload } from './token.service';
 
 @Controller('api/auth')
 export class AuthController {
@@ -30,5 +33,23 @@ export class AuthController {
         const token = await this.auth.login(body.email, body.password, body.code);
         setAuthCookie(req, res, token);
         return { message: 'Login successful' };
+    }
+
+    @Get('me')
+    @UseGuards(CookieAuthGuard)
+    me(@CurrentUser() user: AccessTokenPayload) {
+        return { email: user.email };
+    }
+
+    @Post('logout')
+    @HttpCode(204)
+    @UseGuards(CookieAuthGuard)
+    async logout(
+        @CurrentUser() user: AccessTokenPayload,
+        @Req() req: Request,
+        @Res({ passthrough: true }) res: Response,
+    ) {
+        await this.auth.logout(user.jti, new Date(user.exp * 1000)); // expiration is in seconds, convert to milliseconds
+        clearAuthCookie(req, res);
     }
 }
