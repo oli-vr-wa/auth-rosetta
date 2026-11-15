@@ -5,9 +5,14 @@ import { JWT_AUDIENCE, JWT_EXPIRY_MINUTES, JWT_ISSUER } from './auth.constants';
 import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { TotpService } from './totp.service'; 
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from '@/users/user.entity';
 
 @Module({
     imports: [
+        TypeOrmModule.forFeature([User]),
         JwtModule.registerAsync({
             inject: [ConfigService],
             useFactory: (config: ConfigService) => ({
@@ -21,7 +26,8 @@ import { TotpService } from './totp.service';
             }),
         }),
     ],
-    providers: [PasswordService, TokenService, TotpService],
+    controllers: [AuthController],
+    providers: [PasswordService, TokenService, TotpService, AuthService],
     exports: [PasswordService, TokenService, TotpService],
 })
 export class AuthModule {}

@@ -1,6 +1,6 @@
 export const BCRYPT_COST = 12;
 
-export const TOTP_ISSUER = "AuthRosetta";
+export const TOTP_ISSUER = "AuthRosetta-NestJS";
 
 export const JWT_ISSUER = "AuthRosetta";
 export const JWT_AUDIENCE = "AuthRosetta";
