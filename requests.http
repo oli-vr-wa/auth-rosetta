@@ -19,10 +19,10 @@
 ### ============================================================
 
 # Backend ports: .NET 5001 | NestJS 5002 | Python 5003 | Go 5004 | Java 5005
-@baseUrl = http://localhost:5001
+@baseUrl = http://localhost:5002
 @email = test@example.com
 @password = Sup3rSecret!
-@code = 548339
+@code = 803037
 
 # Paste the cookie VALUE from the step 6 response here (see step 6).
 @stolenToken = paste-token-value-here
