@@ -3,6 +3,7 @@ import {
     BadRequestException,
     ConflictException,
     Injectable,
+    Logger,
     UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -17,6 +18,7 @@ const POSTGRES_UNIQUE_VALIDATION = '23505';
 
 @Injectable()
 export class AuthService {
+    private readonly logger = new Logger(AuthService.name);
     // Used to burn the same time as a real check when the email is unknown.
     private readonly dummyHash: Promise<string>;
 
@@ -115,6 +117,11 @@ export class AuthService {
 
         // Evaluate everything, then fail once with one generic error if anything was wrong. This prevents leaking information about which part was wrong.
         if (!user || !passwordOk || !user.twoFactorEnabled || !codeOk) {
+            this.logger.debug(
+                `Login rejected (user found: ${!!user}, password ok: ${passwordOk}, ` +
+                `2FA enabled: ${user?.twoFactorEnabled ?? false}, code ok: ${codeOk})`
+            );
+
             throw new UnauthorizedException('Invalid credentials');
         }
 
