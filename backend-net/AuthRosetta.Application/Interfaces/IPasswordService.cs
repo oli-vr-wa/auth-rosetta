@@ -16,4 +16,11 @@ public interface IPasswordService
     /// <param name="hash">The hashed password to compare against.</param>
     /// <returns>True if the password matches the hash; otherwise, false.</returns>
     bool Verify(string password, string hash);
+
+    /// <summary>
+    /// Verifies a password against a dummy hash to mitigate timing attacks.
+    /// </summary>
+    /// <param name="password">The password to verify.</param>
+    /// <returns>True if the password matches the dummy hash; otherwise, false.</returns>
+    bool VerifyAgainstDummy(string password);
 }

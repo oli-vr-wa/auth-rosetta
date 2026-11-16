@@ -34,14 +34,9 @@ public static class AuthEndpoints
     /// <returns>The result of the registration attempt.</returns>
     private static async Task<IResult> Register(RegisterRequest request, IAuthService authService)
     {
-        if (string.IsNullOrWhiteSpace(request.Email) 
-            || string.IsNullOrWhiteSpace(request.Password)
-            || request.Password.Length < 8)
-            return Results.BadRequest(new { error = "Valid email and a password of 8+ characters are required" });
+        var result = await authService.RegisterAsync(request);
 
-        var result = await authService.RegisterAsync(request.Email, request.Password);
-
-        return result is null 
+        return result is null
             ? Results.Conflict(new { error = "Email already registered" })
             : Results.Created("/api/auth/me", new { otpauthUri = result.OtpauthUri, secret = result.Secret });
     }
@@ -54,7 +49,7 @@ public static class AuthEndpoints
     /// <returns>The result of the confirmation attempt.</returns>
     private static async Task<IResult> ConfirmTwoFactorAuthentication(ConfirmRequest request, IAuthService authService)
     {
-        return await authService.ConfirmTwoFactorAuthenticationAsync(request.Email, request.Code)
+        return await authService.ConfirmTwoFactorAuthenticationAsync(request)
             ? Results.Ok(new { message = "Two-factor authentication confirmed" })
             : Results.BadRequest(new { error = "Invalid code" });
     }
@@ -69,7 +64,7 @@ public static class AuthEndpoints
     /// <returns>The result of the login attempt.</returns>
     private static async Task<IResult> Login(LoginRequest request, IAuthService authService, JwtOptions jwt, HttpContext ctx)
     {
-        var token = await authService.LoginAsync(request.Email, request.Password, request.Code);
+        var token = await authService.LoginAsync(request);
 
         if (token is null)
             return Results.Json(new { error = "Invalid credentials" }, statusCode: StatusCodes.Status401Unauthorized);

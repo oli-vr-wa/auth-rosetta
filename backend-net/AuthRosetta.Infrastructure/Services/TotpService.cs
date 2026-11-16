@@ -15,5 +15,10 @@ public class TotpService : ITotpService
         $"otpauth://totp/{Uri.EscapeDataString(Issuer)}:{Uri.EscapeDataString(email)}?secret={secret}&issuer={Uri.EscapeDataString(Issuer)}&digits=6&period=60";
 
     /// <inheritdoc />
-    public bool Verify(string secret, string code) => new Totp(Base32Encoding.ToBytes(secret)).VerifyTotp(code, out _, VerificationWindow.RfcSpecifiedNetworkDelay);
+    public bool Verify(string secret, string code) 
+    { 
+        if (code.Length != 6 || !code.All(char.IsAsciiDigit)) return false; // Ensure the code is a 6-digit number
+
+        return new Totp(Base32Encoding.ToBytes(secret)).VerifyTotp(code, out _, VerificationWindow.RfcSpecifiedNetworkDelay);
+    }
 }
