@@ -17,7 +17,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 10 
   
   frontend:
     build: ./frontend-react
@@ -45,7 +45,23 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_KEY: ${JWT_KEY}
     ports:
-      - "5001:8080"  
+      - "5001:8080"
+
+  backend-nest:
+    build: ./backend-nest
+    container_name: rosetta_nest
+    profiles: ["nest"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_KEY: ${JWT_KEY}
+      PORT: "5002"
+    ports:
+      - "5002:5002"
 
 volumes:
   postgres_data:
