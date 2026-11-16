@@ -13,9 +13,11 @@ public interface IUserRepository
 
     /// <summary>
     /// Adds a new user to the repository.
+    /// If a user with the same email already exists, an exception will be thrown.
     /// </summary>
     /// <param name="user">The user to add.</param>
-    void Add(User user);
+    /// <returns>True if the user was added successfully, false if a user with the same email already exists.</returns>
+    Task<bool> TryAddAsync(User user);
 
     /// <summary>
     /// Saves changes made to the repository.

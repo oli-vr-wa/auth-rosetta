@@ -7,27 +7,23 @@ public interface IAuthService
     /// <summary>
     /// Registers a new user with the given email and password.
     /// </summary>
-    /// <param name="email">The email of the user to register.</param>
-    /// <param name="password">The password of the user to register.</param>
+    /// <param name="request">The registration request containing the email and password of the user to register.</param>
     /// <returns>The result of the registration.</returns>
-    Task<RegisterResult?> RegisterAsync(string email, string password);
+    Task<RegisterResult?> RegisterAsync(RegisterRequest request);
 
     /// <summary>
     /// Attempts to log in a user with the given email and password.
     /// </summary>
-    /// <param name="email">The email of the user to confirm.</param>
-    /// <param name="code">The two-factor authentication code.</param>
+    /// <param name="request">The confirmation request containing the email and two-factor authentication code of the user to confirm.</param>
     /// <returns>True if the confirmation is successful; otherwise, false.</returns>
-    Task<bool> ConfirmTwoFactorAuthenticationAsync(string email, string code);
+    Task<bool> ConfirmTwoFactorAuthenticationAsync(ConfirmRequest request);
 
     /// <summary>
     /// Attempts to log in a user with the given email, password, and two-factor authentication code.
     /// </summary>
-    /// <param name="email">The email of the user to log in.</param>
-    /// <param name="password">The password of the user to log in.</param>
-    /// <param name="code">The two-factor authentication code.</param>
+    /// <param name="request">The login request containing the email, password, and two-factor authentication code of the user to log in.</param>
     /// <returns>The authentication token if the login is successful; otherwise, null.</returns>
-    Task<string?> LoginAsync(string email, string password, string code);
+    Task<string?> LoginAsync(LoginRequest request);
 
     /// <summary>
     /// Logs out a user by invalidating their authentication token.

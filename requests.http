@@ -19,7 +19,7 @@
 ### ============================================================
 
 # Backend ports: .NET 5001 | NestJS 5002 | Python 5003 | Go 5004 | Java 5005
-@baseUrl = http://localhost:5002
+@baseUrl = http://localhost:5001
 @email = test@example.com
 @password = Sup3rSecret!
 @code = 000000

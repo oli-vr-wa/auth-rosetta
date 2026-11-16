@@ -1,6 +1,9 @@
 ﻿using AuthRosetta.Application.DTOs;
 using AuthRosetta.Application.Interfaces;
+using AuthRosetta.Application.Validation;
 using AuthRosetta.Domain.Entities.Identity;
+using Microsoft.Extensions.Logging;
+using System.Reflection.Metadata;
 
 namespace AuthRosetta.Application.Services;
 
@@ -9,37 +12,37 @@ public class AuthService(
     IRevokedTokenRepository revokedTokenRepository,
     IPasswordService passwordService,
     ITotpService totpService,
-    ITokenService tokenService) : IAuthService
+    ITokenService tokenService,
+    ILogger<AuthService> logger) : IAuthService
 {
     private static string NormalizeEmail(string email) => email.Trim().ToLowerInvariant();
 
     /// <inheritdoc />
-    public async Task<RegisterResult?> RegisterAsync(string email, string password)
+    public async Task<RegisterResult?> RegisterAsync(RegisterRequest request)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(email, nameof(email));
-        ArgumentException.ThrowIfNullOrWhiteSpace(password, nameof(password));
+        RegisterRules.EnsureValid(request.Email, request.Password);
 
-        email = NormalizeEmail(email);
+        var email = NormalizeEmail(request.Email);
         if (await userRepository.GetByEmailAsync(email) is not null) return null;
 
         var secret = totpService.GenerateSecret();
-        userRepository.Add(new User
+        var user = new User
         {
             Email = email,
-            PasswordHash = passwordService.Hash(password),
-            TotpSecret = secret
-        });
+            PasswordHash = passwordService.Hash(request.Password),
+            TotpSecret = secret,
+        };
 
-        await userRepository.SaveChangesAsync();
+        if (!await userRepository.TryAddAsync(user)) return null;
 
         return new RegisterResult(totpService.BuildUri(email, secret), secret);
     }
 
     /// <inheritdoc />
-    public async Task<bool> ConfirmTwoFactorAuthenticationAsync(string email, string code)
+    public async Task<bool> ConfirmTwoFactorAuthenticationAsync(ConfirmRequest request)
     {
-        var user = await userRepository.GetByEmailAsync(NormalizeEmail(email));
-        if (user is null || !totpService.Verify(user.TotpSecret, code)) return false;
+        var user = await userRepository.GetByEmailAsync(NormalizeEmail(request.Email));
+        if (user is null || !totpService.Verify(user.TotpSecret, request.Code)) return false;
 
         user.TwoFactorEnabled = true;
         await userRepository.SaveChangesAsync();
@@ -47,14 +50,29 @@ public class AuthService(
     }
 
     /// <inheritdoc />
-    public async Task<string?> LoginAsync(string email, string password, string code)
+    public async Task<string?> LoginAsync(LoginRequest request)
     {
-        var user = await userRepository.GetByEmailAsync(NormalizeEmail(email));
-        if (user is null 
-            || !passwordService.Verify(password, user.PasswordHash)
+        var user = await userRepository.GetByEmailAsync(NormalizeEmail(request.Email));
+
+        var passwordOk = user is not null
+            ? passwordService.Verify(request.Password, user.PasswordHash)
+            : passwordService.VerifyAgainstDummy(request.Password);
+        var codeOk = user is not null && totpService.Verify(user.TotpSecret, request.Code);
+
+        if (user is null
+            || !passwordOk
             || !user.TwoFactorEnabled
-            || !totpService.Verify(user.TotpSecret, code)) 
+            || !codeOk)
+        {
+            logger.LogDebug(
+                "Login rejected (user found: {UserFound}, password ok: {PasswordOk}, two-factor enabled: {TwoFactorEnabled}, code ok: {CodeOk})",
+                user is not null,
+                passwordOk,
+                user?.TwoFactorEnabled,
+                codeOk);
+
             return null;
+        }
 
         return tokenService.CreateToken(user.Id, user.Email);
     }    
