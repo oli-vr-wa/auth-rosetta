@@ -2,9 +2,10 @@ import { INestApplication, ValidationPipe } from "@nestjs/common";
 import cookieParser from "cookie-parser";
 import { jsonBody, jsonBodyErrorHandler } from "./common/middleware/json-body.middleware";
 import { ApiExceptionFilter } from "./common/filters/api-exception.filter";
+import { ConfigService } from "@nestjs/config";
 
 
-const FRONTEND_ORIGIN = 'http://localhost:5173';
+const DEFAULT_FRONTEND_ORIGIN = 'http://localhost:5173';
 
 /**
  * Configures the NestJS application with global settings, middleware, and filters.
@@ -12,10 +13,13 @@ const FRONTEND_ORIGIN = 'http://localhost:5173';
  * @param app - The NestJS application instance to configure.
  */
 export function configureApp(app: INestApplication): void {
+    const config = app.get(ConfigService);
+    const frontendOrigin = config.get<string>('FRONTEND_ORIGIN')?.trim() || DEFAULT_FRONTEND_ORIGIN;
+
     // Enable CORS for the frontend origin with specific settings
     // The order matters: CORS must be enabled before any other middleware that handles requests.
     app.enableCors({
-        origin: FRONTEND_ORIGIN,
+        origin: [frontendOrigin],
         credentials: true,
         methods: ['GET', 'POST', 'OPTIONS'],
         allowedHeaders: ['Content-Type'],
