@@ -1,9 +1,8 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import { CanActivate, ExecutionContext, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { AccessTokenPayload, TokenService } from "./token.service";
 import { AuthService } from "./auth.service";
 import type { Request } from 'express';
 import { AUTH_COOKIE_NAME } from "./auth-cookie";
-
 
 export interface AuthenticatedRequest extends Request {
     user?: AccessTokenPayload;
@@ -11,6 +10,8 @@ export interface AuthenticatedRequest extends Request {
 
 @Injectable()
 export class CookieAuthGuard implements CanActivate {
+    private readonly logger = new Logger(CookieAuthGuard.name);
+
     constructor(
         private readonly tokens: TokenService,
         private readonly auth: AuthService
@@ -27,6 +28,7 @@ export class CookieAuthGuard implements CanActivate {
         const cookies = req.cookies as Record<string, unknown> | undefined;
         const token = cookies?.[AUTH_COOKIE_NAME];
         if (typeof token !== 'string' || token === '') {
+            this.logger.debug('Request rejected: no access_token cookie');
             throw new UnauthorizedException();
         }
 
@@ -34,11 +36,13 @@ export class CookieAuthGuard implements CanActivate {
         try {
             payload = await this.tokens.verifyToken(token);
 
-        } catch {
+        } catch (err) {
+            this.logger.debug(`Token rejected: ${err instanceof Error ? err.message : 'unknown error'}`);
             throw new UnauthorizedException();
         }
 
         if (await this.auth.isRevoked(payload.jti)) {
+            this.logger.debug('Token rejected: token has been revoked'); 
             throw new UnauthorizedException();
         }
 
