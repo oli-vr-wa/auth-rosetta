@@ -11,7 +11,7 @@ If a backend behaves differently from this document, the backend is wrong, not t
 | Base path | `/api/auth` |
 | Format | JSON request and response bodies, `Content-Type: application/json` |
 | JSON casing | `camelCase` |
-| Error body | `{ "error": "message" }` |
+| Error body | `{ "error": "message" }` for **every** error (see [Error handling](#error-handling)) |
 | Authentication | JWT in an `HttpOnly` cookie named `access_token` (see [Session cookie](#session-cookie)) |
 | Email handling | Trimmed and lowercased before any lookup or storage |
 
@@ -23,10 +23,17 @@ Because the session lives in a cookie, CORS must allow credentials.
 
 | Setting | Value |
 |---|---|
-| Allowed origin | `http://localhost:5173` (explicit, a wildcard `*` is **not** allowed with credentials) |
+| Allowed origin | `http://localhost:5173` by default, overridable with the optional `FRONTEND_ORIGIN` environment variable |
 | Allow credentials | `true` (`Access-Control-Allow-Credentials: true`) |
 | Allowed methods | `GET`, `POST`, `OPTIONS` |
 | Allowed headers | `Content-Type` |
+
+Rules:
+
+- The allowed origin is **explicit**. A wildcard `*` is never allowed, because browsers reject it together with credentials.
+- If `FRONTEND_ORIGIN` is set, it must be a plain origin such as `http://localhost:5173`: no wildcard, no path, no trailing slash. An invalid value must stop the server at startup.
+- An empty or missing value must fall back to the default and must never be interpreted as "allow any origin".
+- A request from a different origin must never receive an `Access-Control-Allow-Origin` header that matches it. Answering with the single allowed origin, or omitting the header, are both acceptable.
 
 The frontend must send every request with `credentials: "include"`.
 
@@ -55,6 +62,7 @@ Anything calling this API from a browser must follow these rules.
 | Never store, read or send the token yourself | The cookie is `HttpOnly`, so JavaScript cannot see it |
 | Send `code` as a string | A number would drop leading zeros |
 | Treat a `401` from `/me` as "not logged in" | There is no client-side token to inspect |
+| Show the `error` field to the user | Every error body has the same shape |
 | Log out or clear cookies for `localhost` when switching backends | Every backend uses the cookie name `access_token`, and cookies are scoped by host, not by port |
 
 ## Flow
@@ -85,6 +93,36 @@ To clear the cookie, send `Set-Cookie` with the same name, path and attributes a
 
 ---
 
+## Error handling
+
+Every error response, including ones produced by the framework, has the body:
+
+```json
+{ "error": "message" }
+```
+
+| Situation | Status | `error` |
+|---|---|---|
+| Validation failure | `400` | A human-readable message. Several failures are joined with `; ` |
+| Malformed JSON, or a body that is too large | `400` | `Invalid request` |
+| Missing, invalid, expired or revoked session | `401` | `Unauthorized` (any wording is acceptable, but it must not reveal the reason) |
+| Failed login | `401` | `Invalid credentials` |
+| Unknown route | `404` | Any message |
+| Duplicate email | `409` | `Email already registered` |
+| Unexpected server failure | `500` | `Internal server error` |
+
+The messages written in code format above (`Invalid request`, `Invalid credentials`, `Email already registered`, `Internal server error`) are exact. Validation messages are free text.
+
+**Generic to the client, specific in the logs.** The response never says more than the table allows. The real reason (which login check failed, why a token was rejected, the exception behind a `500`) is written to the **server log** instead.
+
+Logging rules:
+
+- Never log secrets: passwords, tokens, TOTP codes, TOTP secrets, cookie values or request bodies.
+- Avoid logging email addresses at debug level.
+- Failure details such as "password ok: false, code ok: true" may be logged at debug level.
+
+---
+
 ## Endpoints
 
 ### `POST /api/auth/register`
@@ -102,8 +140,8 @@ Creates a user and generates a TOTP secret. 2FA is **not** enabled until confirm
 | Status | Body | When |
 |---|---|---|
 | `201 Created` | `{ "otpauthUri": "otpauth://totp/...", "secret": "BASE32SECRET" }` | User created |
-| `400 Bad Request` | `{ "error": "..." }` | Email empty, or password shorter than 8 characters |
-| `409 Conflict` | `{ "error": "Email already registered" }` | Email exists |
+| `400 Bad Request` | `{ "error": "..." }` | Fails [validation](#validation-rules) |
+| `409 Conflict` | `{ "error": "Email already registered" }` | Email exists, including two simultaneous registrations |
 
 ---
 
@@ -122,7 +160,7 @@ Verifies a TOTP code against the stored secret and enables 2FA.
 | Status | Body | When |
 |---|---|---|
 | `200 OK` | `{ "message": "Two-factor authentication enabled" }` | Code valid, 2FA now enabled |
-| `400 Bad Request` | `{ "error": "Invalid code" }` | Code wrong, or the user does not exist (indistinguishable) |
+| `400 Bad Request` | `{ "error": "Invalid code" }` | Code wrong, code not exactly 6 digits, or the user does not exist (all indistinguishable) |
 
 ---
 
@@ -141,9 +179,14 @@ Requires password **and** a valid TOTP code, and the account must have 2FA enabl
 | Status | Body | Headers | When |
 |---|---|---|---|
 | `200 OK` | `{ "message": "Login successful" }` | `Set-Cookie: access_token=...` | All checks pass |
-| `401 Unauthorized` | `{ "error": "Invalid credentials" }` | no cookie | Any failure |
+| `400 Bad Request` | `{ "error": "..." }` | none | The body is malformed: invalid JSON, or a field is missing or not a string |
+| `401 Unauthorized` | `{ "error": "Invalid credentials" }` | none | Any failure |
 
-A login failure must **always** return the same generic `401`. Never reveal whether the email, password, code, or 2FA status was the cause.
+Rules:
+
+- A login failure must **always** return the same generic `401`. Never reveal whether the email, password, code, or 2FA status was the cause.
+- Login applies **no** password or code policy. A short wrong password is an ordinary `401`, never a `400`, so the policy is not leaked and accounts created under an older policy still work.
+- An unknown email must take about as long as a wrong password. Run a password-hash comparison against a dummy hash when the user does not exist, so response time does not reveal which accounts exist.
 
 ---
 
@@ -158,7 +201,7 @@ Returns the identity of the authenticated user.
 | Status | Body | When |
 |---|---|---|
 | `200 OK` | `{ "email": "user@example.com" }` | Valid, non-revoked token |
-| `401 Unauthorized` | none or `{ "error": "..." }` | Cookie missing, or token invalid, expired or revoked |
+| `401 Unauthorized` | `{ "error": "Unauthorized" }` | Cookie missing, or token invalid, expired or revoked |
 
 An anonymous request must never return `200`.
 
@@ -175,17 +218,22 @@ Revokes the token in the cookie so it can no longer be used, even before it expi
 | Status | Body | Headers | When |
 |---|---|---|---|
 | `204 No Content` | none | `Set-Cookie` that clears `access_token` | Token revoked |
-| `401 Unauthorized` | none or `{ "error": "..." }` | none | Cookie missing, or token invalid, expired or already revoked |
+| `401 Unauthorized` | `{ "error": "Unauthorized" }` | none | Cookie missing, or token invalid, expired or already revoked |
 
 ---
 
 ## Validation rules
 
-| Field | Rule |
-|---|---|
-| `email` | Required, non-empty after trimming |
-| `password` | Required, minimum 8 characters |
-| `code` | Required, 6-digit string (send as a string to preserve leading zeros) |
+Validation is enforced by the backend. The frontend's checks are only a convenience.
+
+| Field | Where | Rule |
+|---|---|---|
+| `email` | register | Required, trimmed, non-empty, at most 256 characters |
+| `password` | register | At least 8 characters and at most **72 bytes** (UTF-8). Not trimmed, because spaces are legitimate |
+| `code` | confirm | Exactly 6 digits, sent as a string |
+| `email`, `password`, `code` | login | Must be present and be strings. No other rules (see the login rules above) |
+
+The 72-byte password limit exists because bcrypt only reads the first 72 bytes. Without a limit, two long passwords sharing a 72-byte prefix would be treated as identical. The limit is in bytes, not characters, because a short password in a non-Latin script can exceed 72 bytes.
 
 ## Cryptography and token specifications
 
@@ -213,7 +261,9 @@ Revokes the token in the cookie so it can no longer be used, even before it expi
 otpauth://totp/AuthRosetta:{email}?secret={secret}&issuer=AuthRosetta
 ```
 
-The issuer and email in the label must be URL-encoded.
+The issuer and email in the label must be URL-encoded. The URI may also carry the default parameters `algorithm`, `digits` and `period`, which authenticator apps accept.
+
+A malformed code (wrong length, not digits) is simply an invalid code. It must never cause a `500`.
 
 ### JWT
 
@@ -221,7 +271,7 @@ The JWT is the value of the session cookie.
 
 | Setting | Value |
 |---|---|
-| Algorithm | HS256 |
+| Algorithm | HS256 (verification must accept only this algorithm) |
 | Signing key | `JWT_KEY` environment variable (32+ bytes, never committed) |
 | Issuer | `AuthRosetta` |
 | Audience | `AuthRosetta` |
@@ -240,7 +290,7 @@ The JWT is the value of the session cookie.
 
 ### Token revocation
 
-- `POST /logout` stores the token's `jti` and `exp` in a denylist.
+- `POST /logout` stores the token's `jti` and `exp` in a denylist. Revoking the same token twice is harmless.
 - Every authenticated request must reject a token whose `jti` is in the denylist.
 - Denylist entries whose `exp` has passed may be deleted.
 
@@ -266,15 +316,18 @@ Each backend uses its own naming conventions, but must store these fields.
 | `jti` | string | Primary key |
 | `expiresAt` | timestamp (UTC) | |
 
+Schema changes are made with migrations, never by letting the ORM synchronize the schema automatically.
+
 ## Environment variables
 
-| Variable | Purpose |
-|---|---|
-| `DB_USER` | Postgres username |
-| `DB_PASSWORD` | Postgres password |
-| `JWT_KEY` | JWT signing key |
+| Variable | Required | Purpose |
+|---|---|---|
+| `DB_USER` | Yes | Postgres username |
+| `DB_PASSWORD` | Yes | Postgres password |
+| `JWT_KEY` | Yes | JWT signing key, at least 32 characters |
+| `FRONTEND_ORIGIN` | No | Allowed CORS origin, default `http://localhost:5173` |
 
-All three come from the root `.env` file.
+All of them come from the root `.env` file. A backend must refuse to start if a required variable is missing, or if `JWT_KEY` is too short. Individual stacks may read extra optional variables (for example a database host or a port), which are not part of the contract.
 
 ## Security notes
 
@@ -290,6 +343,10 @@ Cookies are sent automatically, so the API must defend against cross-site reques
 - All state-changing endpoints require a JSON body, which forces a CORS preflight that only the allowed origin passes.
 - `localhost:5173` and `localhost:5001` are the same *site* (ports are ignored), so this works in development. In production the frontend and API must share a registrable domain (for example `app.example.com` and `api.example.com`).
 
+### CORS is not access control
+
+CORS only stops other **websites** from using a visitor's browser, and their cookies, against the API. `curl` and other non-browser clients ignore it completely, so it is never a substitute for authentication.
+
 ## Known limitations (documented on purpose)
 
 - An XSS bug can no longer steal the token, but injected script can still make authenticated requests while the victim's page is open, because the browser attaches the cookie.
@@ -300,18 +357,37 @@ Cookies are sent automatically, so the API must defend against cross-site reques
 - There is no rate limiting or account lockout, so a 6-digit code can be brute-forced.
 - Logout revokes only the presented token. "Log out everywhere" is not supported.
 - Every authenticated request performs a denylist lookup, which trades away statelessness.
+- All backends share one `JWT_KEY`, issuer and audience, so a token issued by one backend passes **signature** validation in another. Revocation is stored per database, so a token revoked in one backend is still accepted by the others. This only matters because the project runs several stacks side by side. Using a per-stack audience (for example `AuthRosetta-nest`) would prevent it.
 - A production setup would normally use a short-lived access token plus a refresh token.
 
 ## Manual test checklist
 
-1. Call `/me` with no cookie and expect `401`.
-2. Register a user and receive `otpauthUri` and `secret`.
-3. Add the secret to an authenticator app.
-4. Login **before** confirming 2FA, and expect `401` with no `Set-Cookie`.
-5. Confirm with a valid code and expect `200`.
-6. Login with a wrong password, wrong code, and unknown email, and expect an identical `401` each time.
-7. Login with valid credentials, expect `200` and a `Set-Cookie` header containing `HttpOnly` and `SameSite=Strict`, and confirm the body contains no token.
-8. Call `/me` and receive the email.
-9. Save the cookie value, then call `/logout` and expect `204` plus a cookie-clearing `Set-Cookie`.
-10. Call `/me` again and expect `401` (cookie gone).
-11. Replay the **saved** cookie value on `/me` and expect `401` (token revoked server-side).
+Use a client **without a cookie jar** (such as `curl`) for the anonymous and replay checks. A leftover cookie in a REST client's jar silently turns those checks into authenticated requests. In Windows PowerShell, use `curl.exe`, because plain `curl` is an alias for something else.
+
+**Anonymous and validation**
+
+1. Call `/me` with no cookie and expect `401` with an `error` field.
+2. Call `/me` with a garbage cookie and expect `401`.
+3. Register with a 7-character password and expect `400`.
+4. Register with a password longer than 72 bytes and expect `400`.
+5. Register with an empty or whitespace-only email and expect `400`.
+6. Send malformed JSON (`{bad`) to `/login` and expect `400` with `{ "error": "Invalid request" }`.
+7. Request an unknown route and expect `404` with an `error` field.
+
+**The flow**
+
+8. Register a user and receive `otpauthUri` and `secret`. Register the same email again and expect `409`.
+9. Add the secret to an authenticator app.
+10. Login **before** confirming 2FA, and expect `401` with no `Set-Cookie`.
+11. Confirm with a wrong code, and with an unknown email, and expect `400` both times. Confirm with a valid code and expect `200`.
+12. Login with a wrong password, wrong code, and unknown email, and expect an identical `401` body each time.
+13. Login with valid credentials, expect `200` and a `Set-Cookie` header containing `HttpOnly` and `SameSite=Strict`, and confirm the body contains no token.
+14. Call `/me` and receive the email.
+15. Save the cookie value, then call `/logout` and expect `204` plus a cookie-clearing `Set-Cookie`.
+16. Call `/me` again and expect `401` (cookie gone).
+17. Replay the **saved** cookie value on `/me` and on `/logout`, and expect `401` both times (token revoked server-side).
+
+**CORS**
+
+18. Send a preflight `OPTIONS` request with `Origin: http://localhost:5173` and expect `Access-Control-Allow-Origin: http://localhost:5173` and `Access-Control-Allow-Credentials: true`.
+19. Send the same request with `Origin: http://evil.example` and confirm the response never contains `Access-Control-Allow-Origin: http://evil.example` or `*`.
