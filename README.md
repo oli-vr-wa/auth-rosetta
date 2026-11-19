@@ -14,7 +14,7 @@ This project serves as a "Rosetta Stone" for backend development. It uses a sing
 |---|---|---|---|---|
 | **.NET 10** (C# + Entity Framework Core) | `net` | 5001 | `auth_net` | Completed |
 | **NestJS** (Node + TypeScript + TypeORM) | `nest` | 5002 | `auth_nest` | Completed |
-| **Python** | `python` | 5003 | `auth_python` | Planned |
+| **Python** | `python` | 5003 | `auth_python` | Working |
 | **Go** | `go` | 5004 | `auth_go` | Planned |
 | **Java** (Spring Boot) | `java` | 5005 | `auth_java` | Planned |
 
