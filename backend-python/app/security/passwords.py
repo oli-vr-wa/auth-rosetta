@@ -53,9 +53,14 @@ def verify_password(password: str, password_hash: str) -> bool:
     Returns:
         True if the password matches the hash and is within the maximum length, False otherwise.
     """
-    raw = password.encode("utf-8")
+    try:
+        raw = password.encode("utf-8")
+    except UnicodeEncodeError:
+        return verify_against_dummy()
+    
     if len(raw) > MAX_PASSWORD_BYTES:
         return verify_against_dummy()
+    
     try:
         return bcrypt.checkpw(raw, password_hash.encode("ascii"))
     except ValueError:
