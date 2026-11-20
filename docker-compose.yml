@@ -44,6 +44,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_KEY: ${JWT_KEY}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
     ports:
       - "5001:8080"
 
@@ -60,8 +61,28 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_KEY: ${JWT_KEY}
       PORT: "5002"
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
     ports:
       - "5002:5002"
+
+  backend-python:
+    build: ./backend-python
+    container_name: rosetta_python
+    profiles: ["python"]
+    depends_on:
+      postgres:
+        condition: service_healthy    
+    environment:
+      DB_HOST: postgres
+      DB_NAME: auth_python
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_KEY: ${JWT_KEY}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "5003:5003"
+    
 
 volumes:
   postgres_data:
