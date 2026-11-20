@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing_extensions import Literal
 from urllib.parse import urlsplit
 from sqlalchemy.engine import URL
 
@@ -26,6 +27,7 @@ class Settings(BaseSettings):
 	db_port: int = 5432
 	db_name: str = "auth_python"
 	frontend_origin: str = DEFAULT_FRONTEND_ORIGIN
+	log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
 	@field_validator("db_user", "db_password", "jwt_key")
 	@classmethod
