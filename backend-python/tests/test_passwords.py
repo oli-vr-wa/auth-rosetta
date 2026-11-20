@@ -19,3 +19,10 @@ def test_verify_nerver_raises_on_odd_input(weird):
 
 def test_verify_against_dummy_is_always_false():
     assert passwords.verify_against_dummy() is False
+
+
+def test_nul_byte_does_not_truncate_the_password():
+    h = passwords.hash_password("pass\x00word-one")
+    assert passwords.verify_password("pass\x00word-one", h)
+    assert not passwords.verify_password("pass\x00word-two", h)
+    assert not passwords.verify_password("pass", h)
