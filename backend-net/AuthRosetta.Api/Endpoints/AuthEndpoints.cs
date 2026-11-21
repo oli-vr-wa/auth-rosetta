@@ -51,7 +51,7 @@ public static class AuthEndpoints
     {
         return await authService.ConfirmTwoFactorAuthenticationAsync(request)
             ? Results.Ok(new { message = "Two-factor authentication confirmed" })
-            : Results.BadRequest(new { error = "Invalid code" });
+            : Results.BadRequest(new { error = "Invalid email or code" });
     }
 
     /// <summary>

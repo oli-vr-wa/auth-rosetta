@@ -40,8 +40,8 @@ public class AuthService(
 
     /// <inheritdoc />
     public async Task<bool> ConfirmTwoFactorAuthenticationAsync(ConfirmRequest request)
-    {
-        var user = await userRepository.GetByEmailAsync(NormalizeEmail(request.Email));
+    {        
+        var user = TextRules.IsStorable(NormalizeEmail(request.Email)) ? await userRepository.GetByEmailAsync(NormalizeEmail(request.Email)) : null;
         if (user is null || !totpService.Verify(user.TotpSecret, request.Code)) return false;
 
         user.TwoFactorEnabled = true;
@@ -52,7 +52,9 @@ public class AuthService(
     /// <inheritdoc />
     public async Task<string?> LoginAsync(LoginRequest request)
     {
-        var user = await userRepository.GetByEmailAsync(NormalizeEmail(request.Email));
+        var normalizedEmail = NormalizeEmail(request.Email);
+        
+        var user = TextRules.IsStorable(normalizedEmail) ? await userRepository.GetByEmailAsync(normalizedEmail) : null;
 
         var passwordOk = user is not null
             ? passwordService.Verify(request.Password, user.PasswordHash)

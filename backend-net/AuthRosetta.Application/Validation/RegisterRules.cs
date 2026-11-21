@@ -23,6 +23,12 @@ public static class RegisterRules
         else if (Encoding.UTF8.GetByteCount(password) > MaxPasswordBytes)
             errors.Add($"Password must be at most {MaxPasswordBytes} bytes");
 
+        if (trimmedEmail is not null && !TextRules.IsStorable(trimmedEmail))
+            errors.Add("Email contains invalid characters");
+
+        if (password is not null && !TextRules.IsStorable(password))
+            errors.Add("Password contains invalid characters");
+
         if (errors.Count > 0)
             throw new RequestValidationException(string.Join("; ", errors));
     }
