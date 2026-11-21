@@ -18,7 +18,7 @@ def register(body: RegisterRequest, auth: AuthServiceDep) -> Response:
 @router.post("/2fa/confirm")
 def confirm(body: ConfirmRequest, auth: AuthServiceDep) -> Response:
     if not auth.confirm_two_factor(body.email, body.code):
-        return JSONResponse({"error": "Invalid code"}, status_code=400)
+        return JSONResponse({"error": "Invalid email or code"}, status_code=400)
     return JSONResponse({"message": "Two-factor authentication enabled"})
 
 
