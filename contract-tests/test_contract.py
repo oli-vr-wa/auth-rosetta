@@ -227,7 +227,7 @@ def test_confirm_rejects_wrong_malformed_and_unknown_codes(client):
         {"email": new_email(), "code": code_for(secret)},  # unknown email
     ]
     for body in bodies:
-        assert_error(client.post(CONFIRM, json=body), 400, "Invalid code")
+        assert_error(client.post(CONFIRM, json=body), 400, "Invalid email or code")
 
 
 # ---------- login ----------
