@@ -27,7 +27,7 @@ def get_engine() -> Engine:
     Returns:
         Engine: The SQLAlchemy engine connected to the database.
     """
-    return create_engine(get_settings().database_url, pool_pre_ping=True)
+    return create_engine(get_settings().database_url, pool_pre_ping=True, hide_parameters=True)
 
 
 @lru_cache

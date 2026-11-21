@@ -18,7 +18,7 @@ def register(body: RegisterRequest, auth: AuthServiceDep) -> Response:
 @router.post("/2fa/confirm")
 def confirm(body: ConfirmRequest, auth: AuthServiceDep) -> Response:
     if not auth.confirm_two_factor(body.email, body.code):
-        return JSONResponse({"error": "Invalid confirmation code"}, status_code=400)
+        return JSONResponse({"error": "Invalid code"}, status_code=400)
     return JSONResponse({"message": "Two-factor authentication enabled"})
 
 
@@ -26,7 +26,7 @@ def confirm(body: ConfirmRequest, auth: AuthServiceDep) -> Response:
 def login(body: LoginRequest, request: Request, auth: AuthServiceDep) -> Response:
     token = auth.login(body.email, body.password, body.code)
     if token is None:
-        return JSONResponse({"error": "Invalid login credentials"}, status_code=401)
+        return JSONResponse({"error": "Invalid credentials"}, status_code=401)
     response = JSONResponse({"message": "Login successful"})
     set_auth_cookie(response, request, token)
     return response

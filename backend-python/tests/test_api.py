@@ -2,6 +2,7 @@ import logging
 
 import pyotp
 import pytest
+import json
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_auth_service
@@ -21,6 +22,29 @@ REGISTER, CONFIRM, LOGIN, ME, LOGOUT = (
     "/api/auth/logout",
 )
 JSON = {"Content-Type": "application/json"}
+
+def test_body_over_8_kib_is_400_invalid_request(client):
+    big = json.dumps({"email": "a@b.com", "password": "x" * 9000, "code": "123456"})
+    r = client.post(LOGIN, content=big, headers=JSON)
+    assert (r.status_code, r.json()) == (400, {"error": "Invalid request"})
+
+
+def test_oversized_error_still_carries_cors_headers(client):
+    big = json.dumps({"email": "a@b.com", "password": "x" * 9000, "code": "123456"})
+    r = client.post(LOGIN, content=big, headers={**JSON, "Origin": ORIGIN})
+    assert r.status_code == 400
+    assert r.headers["access-control-allow-origin"] == ORIGIN
+
+
+def test_chunked_body_over_the_limit_is_400(client):
+    def chunks():
+        yield b'{"email":"a@b.com","code":"123456","password":"'
+        for _ in range(9):
+            yield b"x" * 1024
+        yield b'"}'
+
+    r = client.post(LOGIN, content=chunks(), headers=JSON)
+    assert (r.status_code, r.json()) == (400, {"error": "Invalid request"})
 
 @pytest.fixture
 def app():
@@ -61,8 +85,8 @@ def test_register_201_then_duplicate_409(client):
 @pytest.mark.parametrize(
     "body, message",
     [
-        ({"email": "a@b.com", "password": "short"}, "Password must be at least 8 characters long."),
-        ({"email": "a@b.com", "password": "a" * 73}, "Password must be at most 72 bytes long."),
+        ({"email": "a@b.com", "password": "short"}, "Password must be at least 8 characters"),
+        ({"email": "a@b.com", "password": "a" * 73}, "Password must be at most 72 bytes"),
         ({"email": "   ", "password": PASSWORD}, "Email is required."),
     ],
 )
@@ -92,7 +116,7 @@ def test_malformed_login_bodies_are_400(client, content):
 def test_confirm_with_malformed_code_is_400_invalid_code_not_500(client):
     enable_2fa(client)
     r = client.post(CONFIRM, json={"email": "a@b.com", "code": "12345"})
-    assert (r.status_code, r.json()) == (400, {"error": "Invalid confirmation code"})
+    assert (r.status_code, r.json()) == (400, {"error": "Invalid code"})
 
 
 # ---- login ----
@@ -106,7 +130,7 @@ def test_login_failures_are_all_the_same_401(client):
     ]
     for body in attempts:
         r = client.post(LOGIN, json=body)
-        assert (r.status_code, r.json()) == (401, {"error": "Invalid login credentials"})
+        assert (r.status_code, r.json()) == (401, {"error": "Invalid credentials"})
 
 
 def test_login_before_2fa_confirmation_is_401(client):
