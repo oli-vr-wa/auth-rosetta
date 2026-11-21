@@ -20,6 +20,9 @@ _MESSAGES = {
     415: "Unsupported media type"
 }
 
+class BodyTooLarge(Exception):
+    """Raised when the request body is too large and exceeds the allowed limit."""
+
 
 def message_for(status: int) -> str:
     if status >= 500:
@@ -102,4 +105,18 @@ def register_error_handling(app: FastAPI) -> None:
         """
         logger.warning("%s %s -> %s", request.method, request.url.path, exc.status_code)
         return error_response(exc.status_code, message_for(exc.status_code), exc.headers)
+
+    @app.exception_handler(BodyTooLarge)
+    async def on_body_too_large(request: Request, exc: BodyTooLarge) -> JSONResponse:
+        """Handle requests with bodies that are too large and return a 400 response.
+
+        Args:
+            request: The incoming HTTP request.
+            exc: The BodyTooLarge exception instance.
+
+        Returns:
+            A JSONResponse with a 400 status code and a generic error message.
+        """
+        logger.warning("%s %s -> 400: request body too large", request.method, request.url.path)
+        return error_response(400, message_for(400))
     

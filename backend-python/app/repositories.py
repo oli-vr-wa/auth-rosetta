@@ -1,3 +1,5 @@
+import logging
+
 from datetime import datetime
 
 from psycopg.errors import UniqueViolation
@@ -8,7 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.models import User, RevokedToken
 
-EMAIL_UNIQUE_CONSTRAINT = "uq_user_email"
+logger = logging.getLogger("authrosetta.db")
+
+EMAIL_UNIQUE_CONSTRAINT = "uq_users_email"
 
 
 class SqlUserRepository:
@@ -26,6 +30,12 @@ class SqlUserRepository:
         except IntegrityError as ex:
             self._session.rollback()
             orig = ex.orig
+            logger.warning(
+                "integrity error: type=%s sqlstate=%s constraint=%r",
+                type(orig).__name__,
+                getattr(orig, "sqlstate", None),
+                getattr(getattr(orig, "diag", None), "constraint_name", None),
+            )
             # Only the email constraint means "already registered"
             # any other error is a real bug and should be raised as 500
             if (

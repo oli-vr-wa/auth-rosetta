@@ -32,16 +32,16 @@ def validate_register(email: str, passowrd: str) -> None:
     if not email:
         errors.append("Email is required.")
     elif len(email) > MAX_EMAIL_LENGTH:
-        errors.append(f"Email must be at most {MAX_EMAIL_LENGTH} characters long.")
+        errors.append(f"Email must be at most {MAX_EMAIL_LENGTH} characters")
     elif not is_storeable_text(email):
         errors.append("Email contains invalid characters.")
 
     if len(passowrd) < MIN_PASSWORD_LENGTH:
-        errors.append(f"Password must be at least {MIN_PASSWORD_LENGTH} characters long.")
+        errors.append(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
     elif not is_utf8_encodable(passowrd):
         errors.append("Password contains invalid characters.")
     elif len(passowrd.encode("utf-8")) > MAX_PASSWORD_BYTES:
-        errors.append(f"Password must be at most {MAX_PASSWORD_BYTES} bytes long.")
+        errors.append(f"Password must be at most {MAX_PASSWORD_BYTES} bytes")
 
     if errors:
         raise RequestValidationError("\n".join(errors))
