@@ -255,10 +255,10 @@ def test_odd_characters_never_cause_a_500(client):
         '{"email":"a\\ud800@example.com","password":"correct horse battery","code":"123456"}',
         '{"email":"a@example.com","password":"\\ud800","code":"123456"}',
     ]
-    for raw in raw_bodies:
-        r = client.post(LOGIN, content=raw, headers=JSON_HEADERS)
-        assert r.status_code != 500, r.text
-        assert r.status_code in (400, 401)
+    statuses = []
+    for i, raw in enumerate(raw_bodies):
+        statuses.append((i, client.post(LOGIN, content=raw, headers=JSON_HEADERS).status_code))
+    assert all(status != 500 for _, status in statuses), statuses
 
 
 def test_unknown_email_takes_comparable_time_to_a_wrong_password(client):

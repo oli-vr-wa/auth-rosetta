@@ -56,12 +56,6 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRevokedTokenRepository, RevokedTokenRepository>();
 builder.Services.AddOpenApi();
 
-builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
-    policy.WithOrigins("http://localhost:5173")
-    .AllowAnyHeader()
-    .AllowAnyMethod()
-    .AllowCredentials()));
-
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
@@ -129,9 +123,11 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors("Frontend");
 app.UseApiErrorHandling();  // Add error handling middleware to the pipeline
+app.UseMiddleware<BodySizeLimitMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuthEndpoints();
+app.MapFallback(() => Results.NotFound()).AllowAnonymous(); // Fallback endpoint for unmatched routes, accessible without authentication to match API Contract
 
 app.Run();

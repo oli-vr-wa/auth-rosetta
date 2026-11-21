@@ -14,7 +14,7 @@ public static class ApiErrors
         415 => "Unsupported media type",
         >= 500 => "Internal server error",
         _ => "Request failed"
-    };
+    };    
 
     /// <summary>
     /// Adds error handling middleware to the application pipeline. 
@@ -52,13 +52,14 @@ public sealed class ErrorHandlingMiddleware(RequestDelegate next, ILogger<ErrorH
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
             // Request was canceled by the client, no need to log or return an error response.
-        }
+        }        
         catch (Exception ex) when (!context.Response.HasStarted)
         {
             var (status, message) = ex switch
             {
                 RequestValidationException => (StatusCodes.Status400BadRequest, ex.Message),
                 BadHttpRequestException => (StatusCodes.Status400BadRequest, ApiErrors.MessageFor(400)),
+                RequestBodyTooLargeException => (StatusCodes.Status400BadRequest, ApiErrors.MessageFor(400)),
                 _ => (StatusCodes.Status500InternalServerError, ApiErrors.MessageFor(500))
             };
 
