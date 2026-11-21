@@ -1,6 +1,6 @@
-import { INestApplication, ValidationPipe } from "@nestjs/common";
+import { BadRequestException, INestApplication, ValidationPipe } from "@nestjs/common";
 import cookieParser from "cookie-parser";
-import { jsonBody, jsonBodyErrorHandler } from "./common/middleware/json-body.middleware";
+import { jsonBody, jsonBodyErrorHandler, requireJsonObject } from "./common/middleware/json-body.middleware";
 import { ApiExceptionFilter } from "./common/filters/api-exception.filter";
 import { ConfigService } from "@nestjs/config";
 
@@ -26,8 +26,8 @@ export function configureApp(app: INestApplication): void {
     });
 
     app.use(cookieParser());
-    app.use(jsonBody, jsonBodyErrorHandler); // Middleware to parse JSON bodies and handle errors from the JSON parser
+    app.use(jsonBody, requireJsonObject, jsonBodyErrorHandler); // Middleware to parse JSON bodies and handle errors from the JSON parser
 
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, exceptionFactory: () => new BadRequestException('Invalid request') }));
     app.useGlobalFilters(new ApiExceptionFilter());
 }

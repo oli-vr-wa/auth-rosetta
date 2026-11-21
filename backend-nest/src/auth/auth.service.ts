@@ -13,6 +13,7 @@ import { PasswordService } from './password.service';
 import { TokenService } from './token.service';
 import { TotpService } from './totp.service';
 import { RevokedToken } from './revoked-token.entity';
+import { isStorableText } from '@/common/text';
 
 const POSTGRES_UNIQUE_VALIDATION = '23505';
 
@@ -48,6 +49,7 @@ export class AuthService {
      * @throws ConflictException if the email is already registered.
      */
     async register(email: string, password: string) {
+        await this.checkStorableRequest(email, password, '');
         email = this.normalize(email);
 
         if (await this.users.existsBy({ email })) {
@@ -87,6 +89,8 @@ export class AuthService {
      * @returns void
      */
     async confirmTwoFactor(email: string, code: string): Promise<void> {
+        await this.checkStorableRequest(email, undefined, code, 'Invalid email or code');
+
         const user = await this.users.findOneBy({ email: this.normalize(email) });
 
         // Unknown email or invalid code should both result in the same error to avoid leaking information about registered emails.
@@ -108,6 +112,8 @@ export class AuthService {
      * @returns A JWT token for the authenticated user.
      */
     async login(email: string, password: string, code: string): Promise<string> {
+        await this.checkStorableRequest(email, password, code);
+
         const user = await this.users.findOneBy({ email: this.normalize(email) });
 
         // Always run a password check, so unknown emails take as long as wrong passwords.
@@ -148,5 +154,19 @@ export class AuthService {
      */
     isRevoked(jti: string): Promise<boolean> {
         return this.revokedTokens.existsBy({ jti });
+    }
+
+    /**
+     * Checks if the provided request data is storable and valid.
+     * @param email The email provided by the user.
+     * @param password The password provided by the user.
+     * @param code The TOTP code provided by the user for two-factor authentication.
+     * @throws BadRequestException if the request contains invalid or non-storable data.
+     */
+    async checkStorableRequest(email: string, password: string | undefined, code: string, errorMessage = 'Invalid request'): Promise<void> {        
+        if (!isStorableText(email) || !isStorableText(password ?? '') || !isStorableText(code)) {
+            await this.dummyHash; // Ensure timing consistency for invalid requests            
+            throw new BadRequestException(errorMessage);
+        }
     }
 }
