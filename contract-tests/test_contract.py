@@ -1,16 +1,12 @@
 """Black-box contract tests: they only speak HTTP, so one file serves every backend.
 
-    CONTRACT_BASE_URL   default http://localhost:5003
-    CONTRACT_ORIGIN     default http://localhost:5173 (the frontend origin the backend allows)
-
-Each run registers users named contract-*@example.com; see the cleanup SQL in the docs.
+The target comes from the root .env (VITE_API_URL, FRONTEND_ORIGIN); see target.py.
+Each run registers users named contract-*@example.com.
 """
-
 import base64
 import hashlib
 import hmac
 import json
-import os
 import re
 import statistics
 import threading
@@ -21,8 +17,11 @@ import httpx2 as httpx
 import pyotp
 import pytest
 
-BASE = os.environ.get("CONTRACT_BASE_URL", "http://localhost:5003").rstrip("/")
-ORIGIN = os.environ.get("CONTRACT_ORIGIN", "http://localhost:5173")
+from target import get_target
+
+TARGET = get_target()
+BASE = TARGET.base_url
+ORIGIN = TARGET.origin
 REGISTER, CONFIRM, LOGIN = "/api/auth/register", "/api/auth/2fa/confirm", "/api/auth/login"
 ME, LOGOUT = "/api/auth/me", "/api/auth/logout"
 JSON_HEADERS = {"Content-Type": "application/json"}
