@@ -8,7 +8,7 @@ import (
 	"github.com/pquerna/otp/totp"
 )
 
-const totpIssuer = "AuthRosetta"
+const totpIssuer = "AuthRosetta-Go"
 
 var totpParams = totp.ValidateOpts{
 	Period:    30,
