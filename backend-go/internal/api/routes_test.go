@@ -37,7 +37,7 @@ func assertErrorBody(t *testing.T, rec *httptest.ResponseRecorder, wantMessage s
 }
 
 func TestHealth(t *testing.T) {
-	rec := serve(NewRouter(testOrigin), httptest.NewRequest(http.MethodGet, "/health", nil))
+	rec := serve(NewRouter(nil, testOrigin), httptest.NewRequest(http.MethodGet, "/health", nil))
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("status = %d, want 200", rec.Code)
@@ -51,7 +51,7 @@ func TestHealth(t *testing.T) {
 }
 
 func TestUnknownRouteIsAJSON404(t *testing.T) {
-	rec := serve(NewRouter(testOrigin), httptest.NewRequest(http.MethodGet, "/nope", nil))
+	rec := serve(NewRouter(nil, testOrigin), httptest.NewRequest(http.MethodGet, "/nope", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", rec.Code)
 	}
@@ -59,7 +59,7 @@ func TestUnknownRouteIsAJSON404(t *testing.T) {
 }
 
 func TestWrongMethodIsAJSON404Or405(t *testing.T) {
-	rec := serve(NewRouter(testOrigin), httptest.NewRequest(http.MethodPost, "/health", nil))
+	rec := serve(NewRouter(nil, testOrigin), httptest.NewRequest(http.MethodPost, "/health", nil))
 	if rec.Code != http.StatusNotFound && rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("status = %d, want 404 or 405", rec.Code)
 	}
@@ -67,7 +67,7 @@ func TestWrongMethodIsAJSON404Or405(t *testing.T) {
 }
 
 func TestTrailingSlashIsNotRedirected(t *testing.T) {
-	rec := serve(NewRouter(testOrigin), httptest.NewRequest(http.MethodGet, "/health/", nil))
+	rec := serve(NewRouter(nil, testOrigin), httptest.NewRequest(http.MethodGet, "/health/", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404 (no slash redirects)", rec.Code)
 	}

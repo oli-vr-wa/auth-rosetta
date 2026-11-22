@@ -75,6 +75,37 @@ func TestDecodeJSON(t *testing.T) {
 	}
 }
 
+func TestDecodeAuthBody(t *testing.T) {
+	tests := []struct {
+		name    string
+		body    string
+		badText bool
+		wantErr bool
+	}{
+		{"valid", `{"email":"a","password":"b"}`, false, false},
+		{"lone surrogate", `{"email":"a","password":"\ud800"}`, true, false},
+		{"lone low surrogate", `{"email":"a","password":"\udc00"}`, true, false},
+		{"invalid UTF-8 bytes", "{\"email\":\"\xff\",\"password\":\"b\"}", true, false},
+		{"bad text and a missing field", `{"password":"\ud800"}`, true, false},
+		{"bad text but broken JSON", `{"password":"\ud800"`, false, true},
+		{"bad text but wrong type", `{"email":123,"password":"\ud800"}`, false, true},
+		{"bad text but duplicate names", `{"email":"a","email":"b","password":"\ud800"}`, false, true},
+		{"plain broken JSON", `{bad`, false, true},
+		{"empty body", ``, false, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, badText, err := decodeAuthBody[probe](strings.NewReader(tc.body))
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("err = %v, wantErr %v", err, tc.wantErr)
+			}
+			if err == nil && badText != tc.badText {
+				t.Errorf("badText = %v, want %v", badText, tc.badText)
+			}
+		})
+	}
+}
+
 // show prints the values behind the pointers (a bare %v would print addresses).
 func show(p probe) string {
 	str := func(s *string) string {
