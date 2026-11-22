@@ -15,7 +15,7 @@ This project serves as a "Rosetta Stone" for backend development. It uses a sing
 | **.NET 10** (C# + Entity Framework Core) | `net` | 5001 | `auth_net` | Completed |
 | **NestJS** (Node + TypeScript + TypeORM) | `nest` | 5002 | `auth_nest` | Completed |
 | **Python** (FastAPI + SQLAlchemy + Alembic) | `python` | 5003 | `auth_python` | Completed |
-| **Go** | `go` | 5004 | `auth_go` | Planned |
+| **Go** | `go` | 5004 | `auth_go` | Working |
 | **Java** (Spring Boot) | `java` | 5005 | `auth_java` | Planned |
  
 Every backend implements the same [API contract](docs/api-contract.md), so the frontend works with any of them by changing a couple of environment variables. A shared black-box test suite, [`contract-tests/`](contract-tests/), checks that each backend really does: it only speaks HTTP, so the same file runs against every stack.
