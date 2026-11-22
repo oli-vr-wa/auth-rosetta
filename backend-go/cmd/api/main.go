@@ -37,7 +37,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              ":5004",
-		Handler:           api.NewRouter(),
+		Handler:           api.NewRouter(settings.FrontendOrigin),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
