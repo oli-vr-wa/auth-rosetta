@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"authrosetta/internal/api"
+	"authrosetta/internal/auth"
 	"authrosetta/internal/config"
+	"authrosetta/internal/security"
 	"authrosetta/internal/store"
 )
 
@@ -35,9 +37,23 @@ func main() {
 	defer pool.Close()
 	slog.Info("database connected")
 
+	passwords, err := security.NewPasswords(security.WorkFactor)
+	if err != nil {
+		fatal("password hashing setup failed", err)
+	}
+	tokens, err := security.NewTokens(settings.JWTKey, time.Now)
+	if err != nil {
+		fatal("token setup failed", err)
+	}
+
+	service := auth.NewService(
+		store.NewUsers(pool), store.NewRevokedTokens(pool),
+		passwords, tokens, time.Now,
+	)
+
 	srv := &http.Server{
 		Addr:              ":5004",
-		Handler:           api.NewRouter(settings.FrontendOrigin),
+		Handler:           api.NewRouter(service, settings.FrontendOrigin),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -46,4 +62,9 @@ func main() {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)
 	}
+}
+
+func fatal(message string, err error) {
+	slog.Error(message, "err", err)
+	os.Exit(1)
 }

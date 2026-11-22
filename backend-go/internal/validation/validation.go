@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 )
@@ -41,20 +42,20 @@ func ValidateRegister(email, password string) error {
 
 	switch {
 	case email == "":
-		problems = append(problems, "email is required")
+		problems = append(problems, "Email is required.")
 	case utf8.RuneCountInString(email) > MaxEmailLength:
-		problems = append(problems, "email is too long")
+		problems = append(problems, fmt.Sprintf("Email must be at most %d characters", MaxEmailLength))
 	case !IsStorable(email):
-		problems = append(problems, "email contains invalid characters")
+		problems = append(problems, "Email contains invalid characters.")
 	}
 
 	switch {
-	case !utf8.ValidString(password):
-		problems = append(problems, "password contains invalid characters")
 	case utf8.RuneCountInString(password) < MinPasswordLength:
-		problems = append(problems, "password is too short")
+		problems = append(problems, fmt.Sprintf("Password must be at least %d characters", MinPasswordLength))
+	case !utf8.ValidString(password):
+		problems = append(problems, "Password contains invalid characters.")
 	case len(password) > MaxPasswordBytes:
-		problems = append(problems, "password is too long")
+		problems = append(problems, fmt.Sprintf("Password must be at most %d bytes", MaxPasswordBytes))
 	}
 
 	if len(problems) == 0 {
