@@ -11,11 +11,13 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"authrosetta/internal/auth"
 	"authrosetta/internal/config"
 )
 
-func newTestUsers(t *testing.T) *Users {
+func testPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	// Tests run inside internal/store, so the repo-root .env is three levels up.
 	settings, err := config.Load("../../../.env")
@@ -29,7 +31,11 @@ func newTestUsers(t *testing.T) *Users {
 		t.Fatalf("database not reachable (is Postgres running, and have you run the migrations?): %v", err)
 	}
 	t.Cleanup(pool.Close)
-	return NewUsers(pool)
+	return pool
+}
+
+func newTestUsers(t *testing.T) *Users {
+	return NewUsers(testPool(t))
 }
 
 func uniqueEmail() string {
