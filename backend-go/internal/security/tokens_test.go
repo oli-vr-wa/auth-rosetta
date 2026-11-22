@@ -36,7 +36,7 @@ func signRaw(t *testing.T, method jwt.SigningMethod, key string, claims jwt.MapC
 func validMap() jwt.MapClaims {
 	return jwt.MapClaims{
 		"sub": "user-1", "email": "a@b.com", "jti": "jti-1",
-		"iss": "AuthRosetta-Go", "aud": "AuthRosetta",
+		"iss": "AuthRosetta", "aud": "AuthRosetta",
 		"exp": t0.Add(time.Hour).Unix(),
 	}
 }
@@ -89,7 +89,7 @@ func TestPayloadMatchesTheContract(t *testing.T) {
 	}
 	for key, want := range map[string]any{
 		"sub": "user-1", "email": "a@b.com",
-		"iss": "AuthRosetta-Go", "aud": "AuthRosetta", // aud must be a string
+		"iss": "AuthRosetta", "aud": "AuthRosetta", // aud must be a string
 	} {
 		if payload[key] != want {
 			t.Errorf("%s = %v (%T), want %v", key, payload[key], payload[key], want)
@@ -142,9 +142,9 @@ func TestForgedAndBrokenTokensAreRejected(t *testing.T) {
 
 	otherKey := "ffffffffffffffffffffffffffffffff"
 	noneToken := b64(`{"alg":"none","typ":"JWT"}`) + "." +
-		b64(`{"sub":"user-1","email":"a@b.com","jti":"j","iss":"AuthRosetta-Go","aud":"AuthRosetta","exp":9999999999}`) + "."
+		b64(`{"sub":"user-1","email":"a@b.com","jti":"j","iss":"AuthRosetta","aud":"AuthRosetta","exp":9999999999}`) + "."
 	tampered := parts[0] + "." +
-		b64(`{"sub":"admin","email":"evil@b.com","jti":"j","iss":"AuthRosetta-Go","aud":"AuthRosetta","exp":9999999999}`) +
+		b64(`{"sub":"admin","email":"evil@b.com","jti":"j","iss":"AuthRosetta","aud":"AuthRosetta","exp":9999999999}`) +
 		"." + parts[2]
 
 	tests := map[string]string{

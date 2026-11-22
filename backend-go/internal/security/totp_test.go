@@ -82,7 +82,7 @@ func TestEnrollmentSecretAndURI(t *testing.T) {
 		t.Errorf("unexpected URI start: %s://%s", u.Scheme, u.Host)
 	}
 	for key, want := range map[string]string{
-		"issuer": "AuthRosetta", "secret": e.Secret,
+		"issuer": "AuthRosetta-Go", "secret": e.Secret,
 		"algorithm": "SHA1", "digits": "6", "period": "30",
 	} {
 		if got := q.Get(key); got != want {

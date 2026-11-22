@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	tokenIssuer   = "AuthRosetta-Go"
+	tokenIssuer   = "AuthRosetta"
 	tokenAudience = "AuthRosetta"
 	TokenLifetime = 60 * time.Minute
 	tokenLeeway   = 30 * time.Second
