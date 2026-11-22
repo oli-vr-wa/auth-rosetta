@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 
 	"authrosetta/internal/api"
 	"authrosetta/internal/config"
+	"authrosetta/internal/store"
 )
 
 func main() {
@@ -22,6 +24,16 @@ func main() {
 		Level: settings.LogLevel,
 	})))
 	slog.Info("configuration loaded", "settings", settings.String())
+
+	startCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	pool, err := store.NewPool(startCtx, settings.DatabaseURL())
+	cancel()
+	if err != nil {
+		slog.Error("database unavailable", "err", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+	slog.Info("database connected")
 
 	srv := &http.Server{
 		Addr:              ":5004",
