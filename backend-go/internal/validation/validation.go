@@ -29,7 +29,7 @@ func NormalizeEmail(email string) string {
 // IsStorable checks if the string is valid UTF-8 and does not contain null bytes.
 // s The string to check.
 // Returns True if the string is storable, false otherwise.
-func isStorable(s string) bool {
+func IsStorable(s string) bool {
 	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 
@@ -44,7 +44,7 @@ func ValidateRegister(email, password string) error {
 		problems = append(problems, "email is required")
 	case utf8.RuneCountInString(email) > MaxEmailLength:
 		problems = append(problems, "email is too long")
-	case !isStorable(email):
+	case !IsStorable(email):
 		problems = append(problems, "email contains invalid characters")
 	}
 
