@@ -1,6 +1,5 @@
 package com.authrosetta.java.config;
 
-import java.beans.BeanProperty;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
