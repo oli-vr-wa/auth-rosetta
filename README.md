@@ -15,7 +15,7 @@ This project serves as a "Rosetta Stone" for backend development. It uses a sing
 | **.NET 10** (C# + Entity Framework Core) | `net` | 5001 | `auth_net` | Completed |
 | **NestJS** (Node + TypeScript + TypeORM) | `nest` | 5002 | `auth_nest` | Completed |
 | **Python** (FastAPI + SQLAlchemy + Alembic) | `python` | 5003 | `auth_python` | Completed |
-| **Go** | `go` | 5004 | `auth_go` | Working |
+| **Go** (standard library + pgx + goose) | `go` | 5004 | `auth_go` | Completed |
 | **Java** (Spring Boot) | `java` | 5005 | `auth_java` | Planned |
  
 Every backend implements the same [API contract](docs/api-contract.md), so the frontend works with any of them by changing a couple of environment variables. A shared black-box test suite, [`contract-tests/`](contract-tests/), checks that each backend really does: it only speaks HTTP, so the same file runs against every stack.
@@ -23,7 +23,7 @@ Every backend implements the same [API contract](docs/api-contract.md), so the f
 ## The flow
  
 1. **Register** with an email and password. The API returns a TOTP secret and an `otpauth://` URI.
-2. **Scan the QR code** with an authenticator app and enter a code to confirm. This enables 2FA.
+2. **Scan the QR code** with an authenticator app and enter a code to confirm. This enables 2FA. The authenticator entry is labelled with the stack (for example `AuthRosetta-Go`), so entries from different backends are easy to tell apart.
 3. **Log in** with email, password and a current 6-digit code.
 4. The API sets the session in an **`HttpOnly` cookie**. The browser sends it automatically and JavaScript never sees the token.
 5. The **success page** calls `/me` to prove the session works. **Logout** revokes the token server-side and clears the cookie.
@@ -33,6 +33,7 @@ Every backend implements the same [API contract](docs/api-contract.md), so the f
 * [.NET 10 SDK](https://dotnet.microsoft.com/download) and the EF Core CLI (`dotnet tool install --global dotnet-ef`), needed to run .NET migrations from your machine
 * [Node.js](https://nodejs.org/) 22.12 or newer (20.19+ also works). Needed to run NestJS migrations from your machine, and to run the frontend or NestJS outside Docker
 * [Python](https://www.python.org/downloads/) 3.14 (the version the backend image uses), with the `pip` option ticked in the installer. Needed to run the Python migrations and tests from your machine, and to run the contract tests
+* [Go](https://go.dev/dl/) 1.27 or newer (`go.mod` requires 1.27.4; on Windows, `winget install GoLang.Go`, then open a new terminal). Needed to run the Go migrations and tests from your machine, and to run the Go backend outside Docker
 ## Getting Started
  
 ### 1. Environment variables
@@ -54,7 +55,8 @@ VITE_API_URL=http://localhost:5001
 # Optional: the origin the API allows through CORS (default shown)
 # FRONTEND_ORIGIN=http://localhost:5173
  
-# Optional: DEBUG shows why a login or token was rejected (never logs secrets). Python backend.
+# Optional: DEBUG shows why a login or token was rejected (never logs secrets).
+# Python and Go backends. Use upper case: DEBUG, INFO, WARNING or ERROR.
 # LOG_LEVEL=INFO
 ```
  
@@ -76,7 +78,7 @@ The backends refuse to start if `DB_USER`, `DB_PASSWORD` or `JWT_KEY` is missing
  
 Two rules about this file:
  
-* **Shell variables beat `.env`.** Docker Compose, the contract tests and the Python backend all give an environment variable set in your terminal priority over the same name in `.env`. A stale value (for example `COMPOSE_PROFILES`) makes Compose start the wrong backend even after you edit the file. List suspects with `Get-ChildItem Env: | Where-Object Name -match "COMPOSE|VITE|FRONTEND|JWT|^DB_"` and clear one with `Remove-Item Env:NAME`.
+* **Shell variables beat `.env`.** Docker Compose, the contract tests, the Python backend and the Go backend all give an environment variable set in your terminal priority over the same name in `.env`. A stale value (for example `COMPOSE_PROFILES`) makes Compose start the wrong backend even after you edit the file. List suspects with `Get-ChildItem Env: | Where-Object Name -match "COMPOSE|VITE|FRONTEND|JWT|^DB_"` and clear one with `Remove-Item Env:NAME`.
 * **Only plain values belong in `.env`.** Compose's `${VAR:-default}` syntax goes in `docker-compose.yml`, never in `.env`. The backends read `.env` literally and reject it.
 ### 2. Start everything
  
@@ -162,6 +164,19 @@ alembic revision --autogenerate -m "<Name>"
  
 `alembic current` shows where the database is, and `alembic downgrade -1` undoes the last migration. Run `alembic`, `pytest` and `uvicorn` from inside `backend-python`, because they find the `app` package from the current directory. The connection settings come from the root `.env`; set `DB_PORT` there only if Postgres is published on a port other than 5432.
  
+**Go** (goose)
+ 
+```bash
+cd backend-go
+go run ./cmd/migrate up
+```
+ 
+`go run ./cmd/migrate status` lists applied and pending migrations, and `go run ./cmd/migrate down` undoes the last one. Running `up` twice is safe: the second run reports that it is already up to date.
+ 
+The migrations are plain SQL files in `backend-go/migrations/`, compiled into the `migrate` command. Create a new migration by adding the next numbered file, for example `00002_<name>.sql`, with a `-- +goose Up` section and a `-- +goose Down` section, then run `up` again. Go does not generate migrations from the code, so write the SQL yourself and name constraints explicitly (the repository relies on the name `uq_users_email` to detect duplicate emails).
+ 
+Run every Go command from inside `backend-go`. The programs read the root `.env` from `../.env`, and carry on without it if the file is not found, so running from another folder shows up as missing-variable errors.
+ 
 ### 4. Switching backends
  
 The frontend runs unchanged against every backend. Two settings select which one, and they must be changed together.
@@ -239,9 +254,19 @@ cd backend-python
 uvicorn app.main:app --reload --port 5003
 ```
  
-Outside Docker, all three load the root `.env` automatically. `npm run start:dev` also prints the debug log lines that explain why a login or token was rejected. The Nest container hides them, since it runs with `NODE_ENV=production`. To see them in that container, add `NODE_ENV: development` to the service's `environment` block in `docker-compose.yml`. The Python backend uses `LOG_LEVEL=DEBUG` in the root `.env` instead, both outside Docker and in the container.
+**Go** (port 5004)
  
-Setup notes for Go and Java will be added as each one is completed.
+```bash
+docker compose stop backend-go
+cd backend-go
+go run ./cmd/api
+```
+ 
+Go has no hot reload built in; stop the server with Ctrl+C and run it again after a change.
+ 
+Outside Docker, all four load the root `.env` automatically. `npm run start:dev` also prints the debug log lines that explain why a login or token was rejected. The Nest container hides them, since it runs with `NODE_ENV=production`. To see them in that container, add `NODE_ENV: development` to the service's `environment` block in `docker-compose.yml`. The Python and Go backends use `LOG_LEVEL=DEBUG` in the root `.env` instead, both outside Docker and in the container.
+ 
+Setup notes for Java will be added when it is completed.
  
 ### 7. Testing the API without the frontend
  
@@ -284,7 +309,7 @@ Things to know:
 ```bash
 docker compose exec postgres psql -U <DB_USER> -d auth_python -c "DELETE FROM users WHERE email LIKE 'contract-%@example.com';"
 ```
-  Use `auth_net` or `auth_nest` for the other stacks, and check the table name if you changed it.
+  Use `auth_net`, `auth_nest` or `auth_go` for the other stacks, and check the table name if you changed it.
 * **The timing check is a rough sanity test**, not a benchmark. If only that one test fails, run it once more before investigating.
 **Python's own tests** (unit tests with in-memory fakes, plus in-process HTTP tests) need no database or running server:
  
@@ -292,6 +317,22 @@ docker compose exec postgres psql -U <DB_USER> -d auth_python -c "DELETE FROM us
 cd backend-python
 python -m pytest -q
 ```
+ 
+**Go's own tests** work the same way. The default run needs no database or running server:
+ 
+```bash
+cd backend-go
+go test ./... -count=1
+go vet ./...
+```
+ 
+A second group, the Postgres repository tests, is hidden behind the `integration` build tag, so the default run skips it. It needs Postgres running and the Go migrations applied, and it removes the rows it creates:
+ 
+```bash
+go test -count=1 -tags integration ./internal/store -v
+```
+ 
+`-count=1` turns off Go's test result cache, which matters for tests that talk to a database. If your editor reports "No packages found" for `users_integration_test.go`, set gopls's `buildFlags` to `["-tags=integration"]` in `.vscode/settings.json`.
  
 ## Security design
  
@@ -308,25 +349,30 @@ This is a learning project, and the [API contract](docs/api-contract.md#known-li
  
 | Problem | Fix |
 |---|---|
-| DBeaver shows only the `postgres` database | Tick **Show all databases** in the connection's Main tab, or set the Database field to `auth_net`, `auth_nest` or `auth_python`. |
+| DBeaver shows only the `postgres` database | Tick **Show all databases** in the connection's Main tab, or set the Database field to `auth_net`, `auth_nest`, `auth_python` or `auth_go`. |
 | A stack's database does not exist | The init script did not run. Reset with `docker compose down -v` then `docker compose up -d --build`. |
 | Login succeeds but `/me` returns 401 | You are probably on `127.0.0.1`. Use `http://localhost:5173`. |
 | `/me` returns 200 when it should be 401 in `requests.http` | The editor's cookie jar sent a leftover session cookie. Restart the editor, or test with `curl.exe`. |
 | CORS error in the browser console | Check the frontend runs on port 5173 and the API allows credentials. If you changed `FRONTEND_ORIGIN`, it must match the page's origin exactly. |
-| A backend exits with `Missing required environment variables` | `DB_USER`, `DB_PASSWORD` or `JWT_KEY` is missing from the root `.env`, or the variable names are misspelled. |
+| A backend exits with `Missing required environment variables` | `DB_USER`, `DB_PASSWORD` or `JWT_KEY` is missing from the root `.env`, or the variable names are misspelled. The Go backend prints `invalid configuration` followed by every missing or invalid variable. |
 | A backend exits with a `FRONTEND_ORIGIN` error | Use a plain origin such as `http://localhost:5173`, with no wildcard, path or trailing slash. Compose's `${VAR:-default}` syntax belongs in `docker-compose.yml`, never in `.env`. |
 | Compose starts the wrong backend, or ignores your `.env` edits | A variable with the same name is set in your shell and wins. List them with `Get-ChildItem Env: \| Where-Object Name -match "COMPOSE\|VITE\|FRONTEND\|JWT\|^DB_"`, clear with `Remove-Item Env:NAME`, and run `docker compose --profile "*" down` before starting again. |
 | Frontend calls the wrong backend | `VITE_API_URL` and `COMPOSE_PROFILES` are out of sync. Fix `.env`, then run `docker compose up -d frontend`. |
 | Old backend still running after switching | The profile was changed before `docker compose down`. Stop it with `docker compose stop <service>`. |
 | Edits do not appear in the browser | Check `docker compose logs -f frontend`, and that `USE_POLLING` is `"true"` for the frontend service. |
 | Port 5173 already in use | A local `npm run dev` or another container holds it. The API only allows 5173, so free it rather than changing the port. |
-| Port 5001, 5002 or 5003 already in use | Stop either the local process or the container using it. |
+| Port 5001, 5002, 5003 or 5004 already in use | Stop either the local process or the container using it. A forgotten `go run ./cmd/api` is a common cause for 5004. |
 | NestJS image fails to build while installing `bcrypt` | Its native build did not work. Switch to `bcryptjs`, which has the same API. |
 | Valid code rejected | Check your computer's clock. TOTP depends on accurate time. |
 | Contract tests say `Nothing is answering` | The stack is not up or the backend crashed. Run `docker compose ps` and `docker compose logs --tail 50 <service>`. |
 | Contract tests stop with `COMPOSE_PROFILES=... expects port ...` | `COMPOSE_PROFILES` and `VITE_API_URL` in `.env` disagree. Fix one of them. |
 | Python: `No module named 'app'` when running `pytest` or `alembic` | Run the command from inside `backend-python`. |
 | Python: `ImportError` from `pydantic_core` or `psycopg_binary` | The virtual environment mixes packages built for different Python versions (usually after changing Python version on top of an old `.venv`). Delete `.venv`, recreate it with `py -3.14 -m venv .venv` and reinstall. |
+| Go: `go` is not recognized right after installing it | The installer changed PATH. Close the terminal and open a new one. |
+| Go: `invalid configuration` for variables that are in `.env` | You ran the command from outside `backend-go`, so `../.env` was not found. Run Go commands from inside `backend-go`. |
+| Go: the integration tests say `database not reachable` | Postgres is not running, or the Go migrations have not been applied. Run `docker compose up -d postgres` and `go run ./cmd/migrate up`. |
+| Go on Windows prints `unlinkat ... being used by another process` after `go test`, or `exit status 0xc000013a` after Ctrl+C | Both are harmless. The first is antivirus scanning Go's temporary test binary at the moment it is deleted. The second is how Windows reports Ctrl+C. |
+| `docker compose exec backend-go sh` fails | The Go image is distroless and has no shell. Use `docker compose logs backend-go`, or temporarily switch the last stage of `backend-go/Dockerfile` to `gcr.io/distroless/static-debian13:debug-nonroot`, which includes one. |
 | A tool cannot read `.env` or `requirements.txt` (garbled text or empty result) | The file was saved as UTF-16, which Windows PowerShell 5.1 does with `>`. Re-save it as UTF-8, or write it with `Out-File -Encoding ascii`. |
  
 ## Project Structure
@@ -388,6 +434,18 @@ auth-rosetta/
 │       ├── config.py            # Environment settings with startup validation
 │       └── main.py
 ├── backend-go/              # Go implementation
+│   ├── Dockerfile               # Multi-stage build onto a distroless image
+│   ├── go.mod, go.sum           # Dependencies (pgx, goose, x/crypto, pquerna/otp, golang-jwt)
+│   ├── cmd/
+│   │   ├── api/                 # The server and its composition root
+│   │   └── migrate/             # Migration runner (up, down, status)
+│   ├── migrations/              # SQL migrations, compiled into the migrate command
+│   └── internal/                # Tests sit next to the code as *_test.go
+│       ├── api/                 # Routes, handlers, middleware, JSON decoding, cookies, errors
+│       ├── auth/                # Use cases, shared types, repository interfaces
+│       ├── security/            # Passwords, TOTP, tokens
+│       ├── store/               # pgx repositories (Postgres)
+│       ├── validation/          # Business rules (email and password policy)
+│       └── config/              # Environment settings with startup validation
 └── backend-java/            # Java implementation
 ```
- 
