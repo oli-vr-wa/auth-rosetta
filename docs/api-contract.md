@@ -20,7 +20,7 @@ The black-box suite in [`contract-tests/`](../contract-tests/) is the executable
  
 The `Authorization` header is **not** part of this contract. Clients never see or handle the token: the server sets it on login, the browser sends it automatically, and the server clears it on logout.
  
-Routes outside `/api/auth` are not part of the contract. A backend may expose extras, such as the Python backend's `GET /health`.
+Routes outside `/api/auth` are not part of the contract. A backend may expose extras, such as the `GET /health` endpoint of the Python and Go backends.
  
 ### CORS
  
@@ -108,7 +108,7 @@ Every error response, including ones produced by the framework, has the body:
  
 | Situation | Status | `error` |
 |---|---|---|
-| Validation failure | `400` | A human-readable message. Several failures may be joined with `; ` |
+| Validation failure | `400` | A human-readable message. Several failures may be combined in one string, joined with `; ` or a newline |
 | Malformed JSON, a missing or wrongly typed field, or a body over the size limit | `400` | `Invalid request` |
 | Missing, invalid, expired or revoked session | `401` | `Unauthorized` (it must not reveal the reason) |
 | Failed login | `401` | `Invalid credentials` |
@@ -150,6 +150,8 @@ Creates a user and generates a TOTP secret. 2FA is **not** enabled until confirm
 | `400 Bad Request` | `{ "error": "..." }` | Fails [validation](#validation-rules), or the body is malformed or too large (`Invalid request`) |
 | `409 Conflict` | `{ "error": "Email already registered" }` | Email exists, including two simultaneous registrations (exactly one succeeds, the rest get `409`) |
  
+Text that cannot be represented as valid UTF-8 (a lone surrogate escape such as `\ud800`, or invalid UTF-8 bytes) is a `400`. A backend may report it either as a validation failure or as `Invalid request`, depending on whether its JSON parser or its validation layer notices it first.
+ 
 ---
  
 ### `POST /api/auth/2fa/confirm`
@@ -170,6 +172,10 @@ Verifies a TOTP code against the stored secret and enables 2FA.
 | `400 Bad Request` | `{ "error": "Invalid email or code" }` | Code wrong, code not exactly 6 ASCII digits, or the user does not exist (all indistinguishable, so the response never reveals whether an email is registered) |
 | `400 Bad Request` | `{ "error": "Invalid request" }` | The body is malformed or too large: invalid JSON, or a field is missing, null or not a string |
  
+Rules:
+ 
+- Text the database cannot store (a NUL character, a lone surrogate, invalid UTF-8) in `email` or `code` is an ordinary invalid code: `400` with `Invalid email or code`, indistinguishable from a wrong code. It must never cause a `500`.
+- This holds even when the body contains text that some JSON parsers refuse, such as a lone surrogate escape (`\ud800`) or invalid UTF-8 bytes. A backend whose parser rejects such a body must detect that case itself and answer `Invalid email or code`, not `Invalid request`. Bad text never excuses a body that is malformed in another way: if it is also invalid JSON, or a field is missing or not a string, the answer stays `400 Invalid request`.
 ---
  
 ### `POST /api/auth/login`
@@ -196,6 +202,7 @@ Rules:
 - Login applies **no** password or code policy. A short wrong password is an ordinary `401`, never a `400`, so the policy is not leaked and accounts created under an older policy still work. A password longer than 72 bytes is likewise an ordinary `401`.
 - An unknown email must take about as long as a wrong password. Run a password-hash comparison against a dummy hash when the user does not exist, so response time does not reveal which accounts exist.
 - Text the database cannot store (a NUL character, a lone surrogate) is an ordinary failed login: the same `401`. It must never cause a `500`.
+- This holds even when the body contains text that some JSON parsers refuse, such as a lone surrogate escape (`\ud800`) or invalid UTF-8 bytes: the answer is the same `401`, not `400`. A backend whose parser rejects such a body must detect that case itself. Bad text never excuses a body that is malformed in another way: if it is also invalid JSON, or a field is missing or not a string, the answer stays `400 Invalid request`.
 ---
  
 ### `GET /api/auth/me`
@@ -263,15 +270,17 @@ NUL characters and lone surrogates are rejected because the database cannot stor
 | Period | 30 seconds |
 | Secret | 20 random bytes, Base32 encoded |
 | Verification window | Accept the previous, current and next step (±1) |
-| Issuer | `AuthRosetta` |
+| Issuer (the label shown in the authenticator app) | Not fixed by the contract. Each backend uses `AuthRosetta-<Stack>`, for example `AuthRosetta-Go`, so that entries from different backends can be told apart |
  
 `otpauthUri` format:
  
 ```text
-otpauth://totp/AuthRosetta:{email}?secret={secret}&issuer=AuthRosetta
+otpauth://totp/{issuer}:{email}?secret={secret}&issuer={issuer}
 ```
  
-The issuer and email in the label must be URL-encoded. The URI may also carry the default parameters `algorithm`, `digits` and `period`, which authenticator apps accept.
+`{issuer}` is the backend's own label, for example `AuthRosetta-Go`. The issuer and email in the label must be URL-encoded. The URI may also carry the default parameters `algorithm`, `digits` and `period`, which authenticator apps accept.
+ 
+The TOTP issuer has nothing to do with the JWT `iss` claim below, which is `AuthRosetta` in every backend.
  
 A malformed code (wrong length, not ASCII digits, including digits from other scripts) is simply an invalid code. It must never cause a `500`.
  
@@ -298,7 +307,7 @@ The JWT is the value of the session cookie.
 | `exp` | Expiry (Unix seconds) |
 | `iss` / `aud` | As above |
  
-A token missing `sub`, `email` or `jti`, or whose signature, issuer, audience or algorithm is wrong, is rejected as `Unauthorized`.
+A token missing `exp`, `sub`, `email` or `jti`, or whose signature, issuer, audience or algorithm is wrong, is rejected as `Unauthorized`.
  
 ### Token revocation
  
@@ -367,7 +376,7 @@ CORS only stops other **websites** from using a visitor's browser, and their coo
 - There is no rate limiting or account lockout, so a 6-digit code can be brute-forced.
 - Logout revokes only the presented token. "Log out everywhere" is not supported.
 - Every authenticated request performs a denylist lookup, which trades away statelessness.
-- All backends share one `JWT_KEY`, issuer and audience, so a token issued by one backend passes **signature** validation in another. Revocation is stored per database, so a token revoked in one backend is still accepted by the others. This only matters because the project runs several stacks side by side. Using a per-stack audience (for example `AuthRosetta-nest`) would prevent it.
+- All backends share one `JWT_KEY`, issuer and audience, so a token issued by one backend passes **signature** validation in another. Revocation is stored per database, so a token revoked in one backend is still accepted by the others. This only matters because the project runs several stacks side by side. Using a per-stack audience (for example `AuthRosetta-nest`) would prevent it. The per-stack TOTP issuer label does not help here: it is only the name shown in the authenticator app and has no effect on tokens.
 - A production setup would normally use a short-lived access token plus a refresh token.
 ## Automated verification
  
@@ -404,4 +413,10 @@ Use a client **without a cookie jar** (such as `curl`) for the anonymous and rep
 19. Send a preflight `OPTIONS` request with `Origin: http://localhost:5173` and expect `Access-Control-Allow-Origin: http://localhost:5173` and `Access-Control-Allow-Credentials: true`.
 20. Send the same request with `Origin: http://evil.example` and confirm the response never contains `Access-Control-Allow-Origin: http://evil.example` or `*`.
 21. Call `/me` anonymously with `Origin: http://localhost:5173` and confirm the `401` response still carries `Access-Control-Allow-Origin: http://localhost:5173`.
+**Odd text**
  
+Write each body to a file and send it with `curl.exe --data-binary "@file.json"`. Inline JSON quoting in Windows PowerShell is unreliable, and the `\ud800` below must reach the server as the six literal characters, not as a character your shell interpreted.
+ 
+22. POST `{"email":"a@b.com","password":"\ud800","code":"123456"}` to `/login` and expect `401` with `{ "error": "Invalid credentials" }`: not `400`, and never `500`.
+23. POST `{"email":"a@b.com","code":"\ud800"}` to `/2fa/confirm` and expect `400` with `{ "error": "Invalid email or code" }`.
+24. POST `{"email":"a@b.com","password":"\ud800"}` to `/register` and expect `400` (any message), never `500`.
