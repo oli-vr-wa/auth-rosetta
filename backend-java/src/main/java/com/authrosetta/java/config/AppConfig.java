@@ -15,6 +15,9 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
+import javax.sql.DataSource;
+
+import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -257,6 +260,14 @@ public record AppConfig(
         @Bean 
         public AppConfig appConfig() {
             return AppConfig.loadDefault();
+        }
+
+        @Bean 
+        public DataSource dataSource(AppConfig config) {
+            return DataSourceBuilder.create()
+                .driverClassName("org.postgresql.Driver")
+                .url(config.jdbcUrl())
+                .build();
         }
     }
 }
