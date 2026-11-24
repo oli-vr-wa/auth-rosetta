@@ -7,6 +7,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -257,6 +258,7 @@ public record AppConfig(
 
     @Configuration 
     public static class StringConfig {
+        
         @Bean 
         public AppConfig appConfig() {
             return AppConfig.loadDefault();
@@ -268,6 +270,11 @@ public record AppConfig(
                 .driverClassName("org.postgresql.Driver")
                 .url(config.jdbcUrl())
                 .build();
+        }
+
+        @Bean 
+        public Clock clock() {
+            return Clock.systemUTC();
         }
     }
 }
