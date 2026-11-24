@@ -4,9 +4,11 @@ import java.sql.Timestamp;
 import java.time.Instant;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
 import com.authrosetta.java.auth.RevokedTokenRepository;
 
+@Repository 
 public class PostgresRevokedTokenRepository implements RevokedTokenRepository {
 
     private final JdbcClient jdbc;
