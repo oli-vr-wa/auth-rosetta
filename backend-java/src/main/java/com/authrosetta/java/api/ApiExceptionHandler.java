@@ -47,6 +47,7 @@ public class ApiExceptionHandler implements ErrorController {
     }
 
     @ExceptionHandler({
+        StrictJsonReader.InvalidRequestJsonException.class,
         HttpMessageNotReadableException.class,
         HttpMediaTypeNotSupportedException.class,
         IllegalArgumentException.class
