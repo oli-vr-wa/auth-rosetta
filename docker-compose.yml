@@ -100,6 +100,24 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "5004:5004"
+  
+  backend-java:
+    build: ./backend-java
+    container_name: rosetta_java
+    profiles: ["java"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_NAME: auth_java
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_KEY: ${JWT_KEY}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "5005:5005"
 
 volumes:
   postgres_data:
