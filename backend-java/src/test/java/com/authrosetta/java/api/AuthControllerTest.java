@@ -124,7 +124,7 @@ class AuthControllerTest {
             .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("HttpOnly")))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("SameSite=Strict")))
             .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=3600")))
-            .andExpect(jsonPath("$.ok").value(true));
+            .andExpect(jsonPath("$.message").value("Login successful"));
     }
 
     @Test
@@ -145,14 +145,12 @@ class AuthControllerTest {
         mockMvc.perform(get("/api/auth/me")
                 .cookie(new Cookie("access_token", "valid.jwt")))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.id").value(userId.toString()))
             .andExpect(jsonPath("$.email").value("alice@example.com"));
 
         mockMvc.perform(post("/api/auth/logout")
                 .cookie(new Cookie("access_token", "valid.jwt")))
-            .andExpect(status().isOk())
-            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")))
-            .andExpect(jsonPath("$.ok").value(true));
+            .andExpect(status().isNoContent())
+            .andExpect(header().string(HttpHeaders.SET_COOKIE, containsString("Max-Age=0")));
 
         verify(authService).logout("valid.jwt");
     }

@@ -24,7 +24,8 @@ public class AuthController {
 
     public record RegisterResponse(String otpauthUri, String secret) {}
     public record OkResponse(boolean ok) {}
-    public record MeResponse(String id, String email) {}
+    public record OkResponseMessage(String message) {}
+    public record MeResponse(String email) {}
 
     public AuthController(AuthService authService, StrictJsonReader jsonReader) {
         this.authService = authService;
@@ -48,11 +49,11 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<OkResponse> login(HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<OkResponseMessage> login(HttpServletRequest request, HttpServletResponse response) {
         StrictJsonReader.LoginPayload payload = jsonReader.readLogin(request);
         AuthService.LoginResult result = authService.login(payload.email(), payload.password(), payload.code());
         AuthCookies.setAccessToken(request, response, result.token());
-        return ResponseEntity.ok(new OkResponse(true));
+        return ResponseEntity.ok(new OkResponseMessage("Login successful"));
     }
 
     @GetMapping("/me")
@@ -61,15 +62,15 @@ public class AuthController {
             .orElseThrow(() -> new AuthException(AuthError.UNAUTHORIZED));
         AuthService.AuthenticatedUser user = authService.authenticate(token);
 
-        return ResponseEntity.ok(new MeResponse(user.id().toString(), user.email()));
+        return ResponseEntity.ok(new MeResponse(user.email()));
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<OkResponse> logout(HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
         String token = AuthCookies.readAccessToken(request)
             .orElseThrow(() -> new AuthException(AuthError.UNAUTHORIZED));
         authService.logout(token);
         AuthCookies.clearAccessToken(request, response);
-        return ResponseEntity.ok(new OkResponse(true));
+        return ResponseEntity.noContent().build();
     }
 }
