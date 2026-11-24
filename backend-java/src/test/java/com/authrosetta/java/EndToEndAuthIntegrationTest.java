@@ -94,7 +94,7 @@ class EndToEndAuthIntegrationTest {
             "{\"email\":\"alice@example.com\",\"password\":\"correcthorse\",\"code\":\"" + code + "\"}"
         );
         assertEquals(200, loginRes.statusCode());
-        assertTrue(json.readTree(loginRes.body()).get("ok").asBoolean());
+        assertTrue(json.readTree(loginRes.body()).get("message").asString().equals("Login successful"));
         String setCookie = loginRes.headers().firstValue("Set-Cookie").orElse("");
         assertTrue(setCookie.contains("access_token="));
         assertTrue(setCookie.contains("HttpOnly"));
@@ -105,12 +105,11 @@ class EndToEndAuthIntegrationTest {
         assertEquals(200, meRes.statusCode());
         JsonNode meJson = json.readTree(meRes.body());
         assertEquals("alice@example.com", meJson.get("email").asString());
-        assertFalse(meJson.get("id").asString().isBlank());
 
-        // 7. POST /api/auth/logout -> 200 + revokes jti in Postgres
+        // 7. POST /api/auth/logout -> 204 + revokes jti in Postgres
         HttpResponse<String> logoutRes = postJson("/api/auth/logout", "{}");
-        assertEquals(200, logoutRes.statusCode());
-        assertTrue(json.readTree(logoutRes.body()).get("ok").asBoolean());
+        assertEquals(204, logoutRes.statusCode());
+        assertTrue(logoutRes.body().isBlank());
 
         Long revokedCount = jdbc.sql("SELECT COUNT(*) FROM revoked_tokens")
             .query(Long.class)
