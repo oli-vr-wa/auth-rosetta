@@ -8,12 +8,14 @@ import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.ServerErrorMessage;
 
 import com.authrosetta.java.auth.User;
 import com.authrosetta.java.auth.UserRepository;
 
+@Repository 
 public class PostgresUserRepository implements UserRepository {
 
     private static final String UNIQUE_VIOLATION_SQLSTATE = "23505";
